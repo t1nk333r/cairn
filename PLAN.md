@@ -46,6 +46,8 @@ packages/
   backend-gitea/             Gitea repository contents API
   backend-webdav/            GET/PUT with ETag preconditions
   backend-s3/                SigV4 GET/PUT with ETag preconditions
+native/
+  hsyncd/                    optional Go companion for arbitrary Git/keyring
 manifests/
   chromium.json              Chromium/Helium MV3 overlay
   firefox.json               Firefox MV3 overlay
@@ -138,8 +140,9 @@ available to WebExtensions, and smart HTTP commonly lacks browser CORS support.
 The first Git adapter will therefore use a repository-host contents/commit API
 over HTTPS. Its configuration is provider-neutral where APIs are compatible.
 Truly arbitrary Git remotes are a later feature requiring a separately
-installed native companion; that companion is not required by the other
-backends.
+installed native companion. The companion uses Native Messaging, Git over SSH
+or HTTPS, and the operating-system credential store. It is not required by
+Gitea API, WebDAV, S3, or other browser-only backends.
 
 ### Gitea
 
@@ -242,9 +245,16 @@ target S3-compatible service without losing concurrent changes.
 - Implement and test the explicit Gitea adapter.
 - Add commit messages, branch/path configuration, and conflict recovery.
 - Document the boundary between API-backed Git and arbitrary Git remotes.
+- Scaffold the optional Go native companion and a versioned Native Messaging
+  protocol.
+- Add arbitrary Git clone/fetch/commit/push with SSH agent and HTTPS-token
+  authentication.
+- Store companion credentials in the OS keyring and ship registration helpers
+  for Chromium-family browsers and Firefox.
 
 Exit condition: every inventory change is auditable as a commit and concurrent
-writes produce a reviewable merge instead of overwrite.
+writes produce a reviewable merge instead of overwrite. Arbitrary Git works
+through the optional companion; all other backends continue to work without it.
 
 ### Milestone 4: guided restore and release hardening
 

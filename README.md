@@ -22,6 +22,12 @@ The product structure intentionally adapts proven ideas from the MIT-licensed
 [BOOKMARKORA_ADAPTATION.md](BOOKMARKORA_ADAPTATION.md) for the mapping and the
 boundaries of reuse.
 
+True arbitrary-Git support is designed around an optional native companion,
+informed by the MIT-licensed
+[helium-sync-git](https://github.com/mdeloughry/helium-sync-git). Browser-only
+backends remain available without installing that companion. See
+[HELIUM_SYNC_GIT_ADAPTATION.md](HELIUM_SYNC_GIT_ADAPTATION.md).
+
 ## License
 
 Planned: AGPL-3.0-or-later for original hsync code. Any reused Bookmarkora code
