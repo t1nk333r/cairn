@@ -29,14 +29,16 @@ Milestone 1 is underway. The repository currently includes:
   validation, revision checks, private checkouts, commits, and guarded pushes;
 - capability-gated native Git settings, connection testing, Pull, and Commit
   controls in the Chromium/Helium and Firefox control center;
+- origin-scoped Git HTTPS tokens stored in the operating-system keyring, with
+  non-echoing secret commands and redirect-resistant authorization;
 - runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
   detection;
 - deterministic serialization and inventory-diff primitives;
 - unit tests for capture, filtering, ordering, comparison, import safety, and
   WebDAV behavior.
 
-Authenticated Git HTTPS/SSH transport, encryption, automatic cross-device
-merge, and guided restore are the next slices. Browser-only
+Git SSH transport, encryption, automatic cross-device merge, and guided restore
+are the next slices. Browser-only
 repository, WebDAV, and S3 backends currently expose explicit Pull and Upload
 operations;
 automatic merge is not presented as complete yet.

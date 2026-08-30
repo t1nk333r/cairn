@@ -13,8 +13,10 @@ import { parseInventoryJson, serializeInventory } from '../core/inventory';
 import { loadComparisonBaseline, loadInventory, saveComparisonBaseline } from './inventory-store';
 import {
   loadNativeGitConfig,
+  loadNativeGitCredentialMarker,
   loadNativeGitRemoteVersion,
   saveNativeGitConfig,
+  saveNativeGitCredentialMarker,
   saveNativeGitRemoteVersion,
 } from './native-git-store';
 
@@ -47,13 +49,34 @@ function decodeBase64(value: string): Uint8Array {
 }
 
 async function sendNativeCommand(
-  command: 'testConnection' | 'readInventory' | 'writeInventory',
+  command:
+    | 'testConnection'
+    | 'readInventory'
+    | 'writeInventory'
+    | 'setSecret'
+    | 'deleteSecret',
   payload: object,
 ) {
   const request = createNativeRequest(command, payload);
   const response = await browser.runtime.sendNativeMessage(NATIVE_HOST_NAME, request);
   return parseNativeResult(response, request.requestId);
 }
+
+export async function saveNativeGitCredential(
+  remoteUrl: string,
+  username: string,
+  token: string,
+) {
+  await sendNativeCommand('setSecret', { remoteUrl, username, token });
+  await saveNativeGitCredentialMarker(true);
+}
+
+export async function deleteNativeGitCredential(remoteUrl: string) {
+  await sendNativeCommand('deleteSecret', { remoteUrl });
+  await saveNativeGitCredentialMarker(false);
+}
+
+export { loadNativeGitCredentialMarker };
 
 export async function detectNativeCompanion(): Promise<NativeHello> {
   const request = createHelloRequest();

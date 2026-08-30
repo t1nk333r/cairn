@@ -7,12 +7,27 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/t1nk333r/hsync/native/hsyncd/internal/secrets"
 )
 
 type recordedCommand struct {
 	directory string
 	args      []string
 }
+
+type memorySecrets struct {
+	credential *secrets.Credential
+	requested  string
+}
+
+func (*memorySecrets) Set(string, string, string) error { return nil }
+func (s *memorySecrets) Get(remoteURL string) (*secrets.Credential, error) {
+	s.requested = remoteURL
+	return s.credential, nil
+}
+func (*memorySecrets) Delete(string) error { return nil }
 
 type recordingRunner struct {
 	commands []recordedCommand
@@ -118,6 +133,22 @@ func TestConnectionUsesExactBranchRefWithoutShell(t *testing.T) {
 	want := []string{"ls-remote", "--exit-code", "--heads", "https://git.example.test/alice/sync.git", "refs/heads/main"}
 	if strings.Join(runner.commands[0].args, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("got %#v, want %#v", runner.commands[0].args, want)
+	}
+}
+
+func TestCredentialIsScopedInOperationContext(t *testing.T) {
+	store := &memorySecrets{credential: &secrets.Credential{Username: "alice", Token: "secret-token"}}
+	service := &Service{runner: &recordingRunner{}, secrets: store, timeout: 45 * time.Second}
+	ctx, err := service.withCredential(context.Background(), "https://git.example.test/alice/repo.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	header, _ := ctx.Value(authHeaderContextKey{}).(string)
+	if header != "Authorization: Basic YWxpY2U6c2VjcmV0LXRva2Vu" {
+		t.Fatalf("unexpected authorization header")
+	}
+	if store.requested != "https://git.example.test/alice/repo.git" {
+		t.Fatalf("unexpected keyring lookup: %s", store.requested)
 	}
 }
 

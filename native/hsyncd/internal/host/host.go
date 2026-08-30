@@ -11,6 +11,7 @@ import (
 
 	"github.com/t1nk333r/hsync/native/hsyncd/internal/gittransport"
 	"github.com/t1nk333r/hsync/native/hsyncd/internal/protocol"
+	"github.com/t1nk333r/hsync/native/hsyncd/internal/secrets"
 )
 
 const Name = "dev.t1nk333r.hsync"
@@ -18,6 +19,23 @@ const Name = "dev.t1nk333r.hsync"
 type Host struct {
 	version string
 	git     GitTransport
+	secrets SecretStore
+}
+
+type SecretStore interface {
+	Set(remoteURL, username, token string) error
+	Get(remoteURL string) (*secrets.Credential, error)
+	Delete(remoteURL string) error
+}
+
+type setSecretPayload struct {
+	RemoteURL string `json:"remoteUrl"`
+	Username  string `json:"username"`
+	Token     string `json:"token"`
+}
+
+type deleteSecretPayload struct {
+	RemoteURL string `json:"remoteUrl"`
 }
 
 type GitTransport interface {
@@ -27,11 +45,16 @@ type GitTransport interface {
 }
 
 func New(version string) *Host {
-	return &Host{version: version, git: gittransport.New()}
+	store := secrets.SystemStore{}
+	return &Host{version: version, git: gittransport.New(store), secrets: store}
 }
 
 func NewWithGitTransport(version string, transport GitTransport) *Host {
 	return &Host{version: version, git: transport}
+}
+
+func NewWithDependencies(version string, transport GitTransport, store SecretStore) *Host {
+	return &Host{version: version, git: transport, secrets: store}
 }
 
 func (h *Host) Run(input io.Reader, output io.Writer) error {
@@ -74,6 +97,8 @@ func (h *Host) handle(request protocol.Request) protocol.Response {
 				protocol.CommandTestConnection,
 				protocol.CommandReadInventory,
 				protocol.CommandWriteInventory,
+				protocol.CommandSetSecret,
+				protocol.CommandDeleteSecret,
 			},
 		})
 	case protocol.CommandTestConnection:
@@ -105,6 +130,30 @@ func (h *Host) handle(request protocol.Request) protocol.Response {
 			return gitFailure(request.RequestID, err)
 		}
 		return protocol.Completed(request.RequestID, result)
+	case protocol.CommandSetSecret:
+		var payload setSecretPayload
+		if err := decodePayload(request.Payload, &payload); err != nil {
+			return protocol.Failed(request.RequestID, "invalid_request", err.Error(), false)
+		}
+		if h.secrets == nil {
+			return protocol.Failed(request.RequestID, "keyring", "Keyring storage is unavailable.", false)
+		}
+		if err := h.secrets.Set(payload.RemoteURL, payload.Username, payload.Token); err != nil {
+			return protocol.Failed(request.RequestID, "keyring", "Could not save the Git token in the operating-system keyring.", false)
+		}
+		return protocol.Completed(request.RequestID, map[string]bool{"stored": true})
+	case protocol.CommandDeleteSecret:
+		var payload deleteSecretPayload
+		if err := decodePayload(request.Payload, &payload); err != nil {
+			return protocol.Failed(request.RequestID, "invalid_request", err.Error(), false)
+		}
+		if h.secrets == nil {
+			return protocol.Failed(request.RequestID, "keyring", "Keyring storage is unavailable.", false)
+		}
+		if err := h.secrets.Delete(payload.RemoteURL); err != nil {
+			return protocol.Failed(request.RequestID, "keyring", "Could not delete the Git token from the operating-system keyring.", false)
+		}
+		return protocol.Completed(request.RequestID, map[string]bool{"deleted": true})
 	default:
 		return protocol.Failed(
 			request.RequestID,

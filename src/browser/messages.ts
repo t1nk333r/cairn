@@ -47,6 +47,13 @@ export type HsyncRequest =
   | { type: 'native-git:test-and-save'; config: NativeGitConfig }
   | { type: 'native-git:pull' }
   | { type: 'native-git:upload' }
+  | {
+      type: 'native-git:set-credential';
+      remoteUrl: string;
+      username: string;
+      token: string;
+    }
+  | { type: 'native-git:delete-credential'; remoteUrl: string }
   | { type: 'options:open' };
 
 export type HsyncResponse =
@@ -56,6 +63,10 @@ export type HsyncResponse =
   | { ok: true; giteaConfig: StoredGiteaConfig | null }
   | { ok: true; githubConfig: StoredGitHubConfig | null }
   | { ok: true; nativeCompanion: NativeHello }
-  | { ok: true; nativeGitConfig: NativeGitConfig | null }
+  | {
+      ok: true;
+      nativeGitConfig: NativeGitConfig | null;
+      nativeGitCredentialStored: boolean;
+    }
   | { ok: true }
   | { ok: false; error: string };

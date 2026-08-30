@@ -2,6 +2,7 @@ import type { NativeGitConfig } from '../native/protocol';
 
 const CONFIG_KEY = 'nativeGitConfig';
 const VERSION_KEY = 'nativeGitRemoteVersion';
+const CREDENTIAL_MARKER_KEY = 'nativeGitCredentialStored';
 
 export async function saveNativeGitConfig(config: NativeGitConfig): Promise<void> {
   const stored = await browser.storage.local.get(CONFIG_KEY);
@@ -10,7 +11,20 @@ export async function saveNativeGitConfig(config: NativeGitConfig): Promise<void
     ([key, value]) => previous[key as keyof NativeGitConfig] !== value,
   );
   await browser.storage.local.set({ [CONFIG_KEY]: config });
-  if (changed) await browser.storage.local.remove(VERSION_KEY);
+  if (changed) await browser.storage.local.remove([VERSION_KEY, CREDENTIAL_MARKER_KEY]);
+}
+
+export async function saveNativeGitCredentialMarker(stored: boolean): Promise<void> {
+  if (stored) {
+    await browser.storage.local.set({ [CREDENTIAL_MARKER_KEY]: true });
+  } else {
+    await browser.storage.local.remove(CREDENTIAL_MARKER_KEY);
+  }
+}
+
+export async function loadNativeGitCredentialMarker(): Promise<boolean> {
+  const stored = await browser.storage.local.get(CREDENTIAL_MARKER_KEY);
+  return stored[CREDENTIAL_MARKER_KEY] === true;
 }
 
 export async function loadNativeGitConfig(): Promise<NativeGitConfig | null> {

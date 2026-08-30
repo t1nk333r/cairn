@@ -46,6 +46,7 @@ function App() {
   const [githubSaved, setGitHubSaved] = useState(false);
   const [nativeCompanion, setNativeCompanion] = useState<NativeHello | null>(null);
   const [nativeGitSaved, setNativeGitSaved] = useState(false);
+  const [nativeGitCredentialStored, setNativeGitCredentialStored] = useState(false);
   const [webdav, setWebdav] = useState({
     baseUrl: '',
     fileName: 'hsync.json',
@@ -83,6 +84,10 @@ function App() {
     branch: 'main',
     filePath: 'hsync.json',
   });
+  const [nativeGitCredential, setNativeGitCredential] = useState({
+    username: '',
+    token: '',
+  });
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (capture = false) => {
@@ -114,6 +119,9 @@ function App() {
       if (response.ok && 'nativeGitConfig' in response && response.nativeGitConfig) {
         setNativeGit(response.nativeGitConfig);
         setNativeGitSaved(true);
+      }
+      if (response.ok && 'nativeGitCredentialStored' in response) {
+        setNativeGitCredentialStored(response.nativeGitCredentialStored);
       }
     });
   }, []);
@@ -430,6 +438,47 @@ function App() {
     }
   };
 
+  const storeNativeGitCredential = async () => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('native-git-credential');
+    try {
+      const response = await sendRequest({
+        type: 'native-git:set-credential',
+        remoteUrl: nativeGit.remoteUrl,
+        username: nativeGitCredential.username,
+        token: nativeGitCredential.token,
+      });
+      if (!response.ok) throw new Error(response.error);
+      setNativeGitCredential((current) => ({ ...current, token: '' }));
+      setNativeGitCredentialStored(true);
+      setNotice('Git token saved in the operating-system keyring.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const removeNativeGitCredential = async () => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('native-git-credential-delete');
+    try {
+      const response = await sendRequest({
+        type: 'native-git:delete-credential',
+        remoteUrl: nativeGit.remoteUrl,
+      });
+      if (!response.ok) throw new Error(response.error);
+      setNativeGitCredentialStored(false);
+      setNotice('Git token removed from the operating-system keyring.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
   const clearBaseline = async () => {
     const response = await sendRequest({ type: 'baseline:clear' });
     if (!response.ok) {
@@ -571,10 +620,11 @@ function App() {
                     value={nativeGit.remoteUrl}
                     onChange={(event) => {
                       setNativeGitSaved(false);
+                      setNativeGitCredentialStored(false);
                       setNativeGit((current) => ({ ...current, remoteUrl: event.target.value }));
                     }}
                   />
-                  <small>Public HTTPS only in this build. Credential-bearing URLs are rejected.</small>
+                  <small>Credentials are stored by origin in the OS keyring. Credential-bearing URLs are rejected.</small>
                 </label>
                 <label>
                   <span>Branch</span>
@@ -596,6 +646,30 @@ function App() {
                     }}
                   />
                 </label>
+                {nativeCompanion.capabilities.includes('setSecret') && (
+                  <>
+                    <label>
+                      <span>Git username</span>
+                      <input
+                        autoComplete="username"
+                        placeholder="git account username"
+                        value={nativeGitCredential.username}
+                        onChange={(event) => setNativeGitCredential((current) => ({ ...current, username: event.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      <span>Access token</span>
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder={nativeGitCredentialStored ? 'Stored in OS keyring' : ''}
+                        value={nativeGitCredential.token}
+                        onChange={(event) => setNativeGitCredential((current) => ({ ...current, token: event.target.value }))}
+                      />
+                      <small>The token is sent directly to hsyncd and never saved by the extension.</small>
+                    </label>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -608,6 +682,16 @@ function App() {
                 <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveNativeGit()}>
                   {remoteBusy === 'native-git-test' ? 'Testing…' : 'Test & save'}
                 </button>
+                {nativeCompanion.capabilities.includes('setSecret') && (
+                  <button className="secondary-button" disabled={remoteBusy !== null || !nativeGit.remoteUrl || !nativeGitCredential.username || !nativeGitCredential.token} onClick={() => void storeNativeGitCredential()}>
+                    {remoteBusy === 'native-git-credential' ? 'Saving…' : 'Save token'}
+                  </button>
+                )}
+                {nativeGitCredentialStored && nativeCompanion.capabilities.includes('deleteSecret') && (
+                  <button className="text-button" disabled={remoteBusy !== null} onClick={() => void removeNativeGitCredential()}>
+                    {remoteBusy === 'native-git-credential-delete' ? 'Removing…' : 'Remove token'}
+                  </button>
+                )}
                 <button className="secondary-button" disabled={!nativeGitSaved || remoteBusy !== null || !nativeCompanion.capabilities.includes('readInventory')} onClick={() => void runNativeGitAction('pull')}>
                   {remoteBusy === 'native-git-pull' ? 'Pulling…' : 'Pull'}
                 </button>

@@ -48,7 +48,12 @@ export function createHelloRequest(requestId: string = crypto.randomUUID()) {
 }
 
 export function createNativeRequest(
-  command: 'testConnection' | 'readInventory' | 'writeInventory',
+  command:
+    | 'testConnection'
+    | 'readInventory'
+    | 'writeInventory'
+    | 'setSecret'
+    | 'deleteSecret',
   payload: object,
   requestId: string = crypto.randomUUID(),
 ) {

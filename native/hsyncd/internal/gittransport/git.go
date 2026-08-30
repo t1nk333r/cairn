@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/t1nk333r/hsync/native/hsyncd/internal/secrets"
 )
 
 const maxInventorySize = 768 * 1024
@@ -54,6 +56,8 @@ type Runner interface {
 
 type ExecRunner struct{}
 
+type authHeaderContextKey struct{}
+
 func (ExecRunner) Run(ctx context.Context, directory string, args ...string) ([]byte, error) {
 	command := exec.CommandContext(ctx, "git", args...)
 	command.Dir = directory
@@ -64,6 +68,15 @@ func (ExecRunner) Run(ctx context.Context, directory string, args ...string) ([]
 		"GIT_CONFIG_GLOBAL="+os.DevNull,
 		"GIT_SSH_COMMAND=ssh -oBatchMode=yes",
 	)
+	if header, ok := ctx.Value(authHeaderContextKey{}).(string); ok && header != "" {
+		command.Env = append(command.Env,
+			"GIT_CONFIG_COUNT=2",
+			"GIT_CONFIG_KEY_0=http.extraHeader",
+			"GIT_CONFIG_VALUE_0="+header,
+			"GIT_CONFIG_KEY_1=http.followRedirects",
+			"GIT_CONFIG_VALUE_1=false",
+		)
+	}
 	output, err := command.CombinedOutput()
 	if err != nil {
 		message := strings.TrimSpace(string(output))
@@ -77,11 +90,12 @@ func (ExecRunner) Run(ctx context.Context, directory string, args ...string) ([]
 
 type Service struct {
 	runner  Runner
+	secrets secrets.Store
 	timeout time.Duration
 }
 
-func New() *Service {
-	return &Service{runner: ExecRunner{}, timeout: 45 * time.Second}
+func New(store secrets.Store) *Service {
+	return &Service{runner: ExecRunner{}, secrets: store, timeout: 45 * time.Second}
 }
 
 func NewWithRunner(runner Runner) *Service {
@@ -138,12 +152,20 @@ func (s *Service) TestConnection(parent context.Context, raw Config) error {
 	}
 	ctx, cancel := context.WithTimeout(parent, s.timeout)
 	defer cancel()
+	ctx, err = s.withCredential(ctx, config.RemoteURL)
+	if err != nil {
+		return err
+	}
 	_, err = s.runner.Run(ctx, "", "ls-remote", "--exit-code", "--heads", config.RemoteURL, "refs/heads/"+config.Branch)
 	return classifyGitError(ctx, err, "Could not find or access the configured Git branch.")
 }
 
 func (s *Service) Read(parent context.Context, raw Config) (*ReadResult, error) {
 	config, err := NormalizeConfig(raw)
+	if err != nil {
+		return nil, err
+	}
+	parent, err = s.withCredential(parent, config.RemoteURL)
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +204,10 @@ func (s *Service) Write(parent context.Context, input WriteInput) (*WriteResult,
 	data, err := base64.StdEncoding.Strict().DecodeString(input.DataBase64)
 	if err != nil || len(data) > maxInventorySize {
 		return nil, &Error{Code: "invalid_inventory", Message: "Inventory content is not valid Base64 or exceeds the safe size limit."}
+	}
+	parent, err = s.withCredential(parent, config.RemoteURL)
+	if err != nil {
+		return nil, err
 	}
 	repository, cleanup, ctx, cancel, err := s.clone(parent, config)
 	if err != nil {
@@ -293,4 +319,19 @@ func classifyGitError(ctx context.Context, err error, fallback string) error {
 		return &Error{Code: "timeout", Message: "Git operation timed out.", Retryable: true}
 	}
 	return &Error{Code: "git", Message: fallback, Retryable: true}
+}
+
+func (s *Service) withCredential(ctx context.Context, remoteURL string) (context.Context, error) {
+	if s.secrets == nil {
+		return ctx, nil
+	}
+	credential, err := s.secrets.Get(remoteURL)
+	if err != nil {
+		return nil, &Error{Code: "keyring", Message: "Could not read the Git credential from the operating-system keyring."}
+	}
+	if credential == nil {
+		return ctx, nil
+	}
+	value := base64.StdEncoding.EncodeToString([]byte(credential.Username + ":" + credential.Token))
+	return context.WithValue(ctx, authHeaderContextKey{}, "Authorization: Basic "+value), nil
 }

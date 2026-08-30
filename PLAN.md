@@ -249,8 +249,9 @@ target S3-compatible service without losing concurrent changes.
   protocol. (Implemented: framing, negotiation, capability reporting, and
   Chromium/Firefox manifest templates, plus extension-side detection.)
 - Add arbitrary Git clone/fetch/commit/push with SSH agent and HTTPS-token
-  authentication. (Public HTTPS clone/read/commit/push and optimistic revision
-  checks plus extension controls are implemented; authenticated transports remain.)
+  authentication. (HTTPS clone/read/commit/push and optimistic revision
+  checks, extension controls, and keyring-backed HTTPS tokens are implemented;
+  SSH remains.)
 - Store companion credentials in the OS keyring and ship registration helpers
   for Chromium-family browsers and Firefox.
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/t1nk333r/hsync/native/hsyncd/internal/gittransport"
 	"github.com/t1nk333r/hsync/native/hsyncd/internal/protocol"
+	"github.com/t1nk333r/hsync/native/hsyncd/internal/secrets"
 )
 
 func exchange(t *testing.T, request protocol.Request) protocol.Response {
@@ -31,6 +32,19 @@ func exchange(t *testing.T, request protocol.Request) protocol.Response {
 type fakeGitTransport struct {
 	tested gittransport.Config
 }
+
+type fakeSecretStore struct {
+	remoteURL string
+	username  string
+	token     string
+}
+
+func (s *fakeSecretStore) Set(remoteURL, username, token string) error {
+	s.remoteURL, s.username, s.token = remoteURL, username, token
+	return nil
+}
+func (*fakeSecretStore) Get(string) (*secrets.Credential, error) { return nil, nil }
+func (*fakeSecretStore) Delete(string) error                     { return nil }
 
 func (f *fakeGitTransport) TestConnection(_ context.Context, config gittransport.Config) error {
 	f.tested = config
@@ -73,7 +87,7 @@ func TestHelloNegotiatesCapabilities(t *testing.T) {
 	}
 	result, ok := response.Result.(map[string]any)
 	capabilities, capabilitiesOK := result["capabilities"].([]any)
-	if !ok || result["hostVersion"] != "0.1.0-test" || !capabilitiesOK || len(capabilities) != 4 {
+	if !ok || result["hostVersion"] != "0.1.0-test" || !capabilitiesOK || len(capabilities) != 6 {
 		t.Fatalf("unexpected hello result: %#v", response.Result)
 	}
 }
@@ -141,5 +155,25 @@ func TestConnectionCommandRejectsUnknownPayloadFields(t *testing.T) {
 	})
 	if response.Error == nil || response.Error.Code != "invalid_request" {
 		t.Fatalf("unexpected response: %#v", response)
+	}
+}
+
+func TestSetSecretStoresCredentialWithoutReturningIt(t *testing.T) {
+	store := &fakeSecretStore{}
+	response := exchangeWithHost(t, NewWithDependencies("test", &fakeGitTransport{}, store), protocol.Request{
+		ProtocolVersion: protocol.Version,
+		RequestID:       "req-secret",
+		Command:         protocol.CommandSetSecret,
+		Payload:         json.RawMessage(`{"remoteUrl":"https://git.example.test/repo.git","username":"alice","token":"sensitive"}`),
+	})
+	if response.Event != "completed" || store.token != "sensitive" || store.username != "alice" {
+		t.Fatalf("unexpected response or store: %#v %#v", response, store)
+	}
+	encoded, err := json.Marshal(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte("sensitive")) {
+		t.Fatal("secret was echoed in the native response")
 	}
 }

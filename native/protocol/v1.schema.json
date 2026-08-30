@@ -25,6 +25,24 @@
         "expectedVersion": { "type": ["string", "null"] }
       }
     },
+    "setSecretInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["remoteUrl", "username", "token"],
+      "properties": {
+        "remoteUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "username": { "type": "string", "minLength": 1 },
+        "token": { "type": "string", "minLength": 1, "maxLength": 16384 }
+      }
+    },
+    "deleteSecretInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["remoteUrl"],
+      "properties": {
+        "remoteUrl": { "type": "string", "format": "uri", "pattern": "^https://" }
+      }
+    },
     "request": {
       "type": "object",
       "additionalProperties": false,

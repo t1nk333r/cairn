@@ -4,20 +4,26 @@
 Git HTTPS and SSH transport, OS-keyring credentials, and safe concurrent Git
 updates for users who choose that backend.
 
-The companion supports public HTTPS Git remotes for connection tests,
+The companion supports authenticated HTTPS Git remotes for connection tests,
 inventory reads, optimistic revision checks, commits, and pushes. It invokes
 the system Git executable directly without a shell, disables interactive
 prompts and ambient Git configuration, validates branch/file inputs, and works
 only in private temporary checkouts.
 
-Token/keyring and SSH authentication are not implemented yet. Credential-bearing
-URLs are rejected, and the companion does not advertise sync or secret commands.
+HTTPS credentials are stored by origin in macOS Keychain, Linux Secret Service,
+or Windows Credential Manager. Tokens never appear in Git command arguments,
+saved extension configuration, native responses, or logs. Authenticated Git
+requests refuse redirects. Credential-bearing URLs remain rejected.
+
+SSH authentication is not implemented yet, and the companion does not advertise
+the combined sync command.
 The extension requests its optional Native Messaging permission only when the
 user selects **Detect companion**, then validates the correlated hello response
 and displays the companion version and advertised capabilities.
 When Git transport capabilities are present, the control center exposes the
 remote URL, branch, and inventory path plus connection, Pull, and Commit actions.
 It retains the last-read revision locally and supplies it on the next write.
+The token field is cleared immediately after the keyring confirms storage.
 
 ## Development
 
