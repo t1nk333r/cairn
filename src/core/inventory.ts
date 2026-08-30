@@ -52,6 +52,19 @@ export interface CaptureInventoryInput {
   now?: () => Date;
 }
 
+export class InventoryFormatError extends Error {
+  constructor(
+    public readonly code:
+      | 'invalid_json'
+      | 'invalid_inventory'
+      | 'unsupported_schema',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'InventoryFormatError';
+  }
+}
+
 const CHROMIUM_STORE_ID = /^[a-p]{32}$/;
 
 function defined<T extends object>(value: T): T {
@@ -124,6 +137,8 @@ export function isInventoryDocument(value: unknown): value is InventoryDocument 
     typeof candidate.generatedAt === 'string' &&
     !!candidate.device &&
     typeof candidate.device.id === 'string' &&
+    typeof candidate.device.label === 'string' &&
+    typeof candidate.device.browserName === 'string' &&
     (candidate.device.browserFamily === 'chromium' ||
       candidate.device.browserFamily === 'firefox') &&
     Array.isArray(candidate.extensions) &&
@@ -133,9 +148,51 @@ export function isInventoryDocument(value: unknown): value is InventoryDocument 
         typeof item.id === 'string' &&
         typeof item.name === 'string' &&
         typeof item.version === 'string' &&
-        typeof item.enabled === 'boolean',
+        typeof item.enabled === 'boolean' &&
+        typeof item.type === 'string' &&
+        typeof item.observedAt === 'string' &&
+        (item.browserFamily === 'chromium' || item.browserFamily === 'firefox'),
     )
   );
+}
+
+export function parseInventoryJson(text: string): InventoryDocument {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new InventoryFormatError(
+      'invalid_json',
+      'The selected file is not valid JSON.',
+    );
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    'schemaVersion' in value &&
+    (value as { schemaVersion?: unknown }).schemaVersion !==
+      INVENTORY_SCHEMA_VERSION
+  ) {
+    throw new InventoryFormatError(
+      'unsupported_schema',
+      `This inventory uses unsupported schema version ${String((value as { schemaVersion?: unknown }).schemaVersion)}.`,
+    );
+  }
+
+  if (!isInventoryDocument(value)) {
+    throw new InventoryFormatError(
+      'invalid_inventory',
+      'The selected JSON file is not a valid hsync inventory.',
+    );
+  }
+
+  return {
+    ...value,
+    extensions: [...value.extensions].sort((left, right) =>
+      left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
+    ),
+  };
 }
 
 export function serializeInventory(inventory: InventoryDocument): string {

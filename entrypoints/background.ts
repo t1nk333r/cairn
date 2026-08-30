@@ -1,5 +1,11 @@
 import { getDeviceObservation } from '../src/browser/device';
-import { loadInventory, saveInventory } from '../src/browser/inventory-store';
+import {
+  clearComparisonBaseline,
+  loadComparisonBaseline,
+  loadInventory,
+  saveComparisonBaseline,
+  saveInventory,
+} from '../src/browser/inventory-store';
 import type { HsyncRequest, HsyncResponse } from '../src/browser/messages';
 import { captureInventory } from '../src/core/inventory';
 
@@ -40,6 +46,30 @@ export default defineBackground(() => {
             error: error instanceof Error ? error.message : String(error),
           }));
       }
+      if (request.type === 'baseline:get') {
+        return loadComparisonBaseline()
+          .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'baseline:set') {
+        return saveComparisonBaseline(request.inventory)
+          .then(() => ({ ok: true as const, inventory: request.inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'baseline:clear') {
+        return clearComparisonBaseline()
+          .then(() => ({ ok: true as const, inventory: null }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
       if (request.type === 'options:open') {
         return browser.runtime
           .openOptionsPage()
@@ -53,4 +83,3 @@ export default defineBackground(() => {
     },
   );
 });
-

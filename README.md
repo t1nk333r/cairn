@@ -12,8 +12,10 @@ Milestone 1 is underway. The repository currently includes:
 - automatic recapture on install, uninstall, enable, and disable events;
 - local inventory persistence with hsync self-exclusion;
 - a compact popup and full-page inventory control center;
+- validated local JSON export/import using a separate comparison baseline;
+- a comparison view for missing, local-only, version, and state differences;
 - deterministic serialization and inventory-diff primitives;
-- unit tests for capture, filtering, ordering, and comparison.
+- unit tests for capture, filtering, ordering, comparison, and import safety.
 
 Remote connections, encryption, cross-device merge, and guided restore are the
 next slices; the current UI labels those areas rather than pretending they are

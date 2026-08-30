@@ -17,19 +17,24 @@ nav a { text-decoration: none; color: #99a6bd; padding: 9px 11px; border-radius:
 nav a.active { color: white; background: #2a3549; }
 aside p { margin-top: auto; padding: 0 10px; color: #75839d; font-size: 11px; line-height: 1.5; }
 main { padding: 34px clamp(28px, 5vw, 72px) 64px; max-width: 1320px; width: 100%; }
-main > header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 24px; }
+main > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
 header span { color: #697386; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 h1 { margin: 5px 0 0; font-size: 28px; letter-spacing: -.035em; }
 header button { border: 0; border-radius: 9px; padding: 10px 16px; background: #315efb; color: #fff; font-weight: 700; cursor: pointer; }
 header button:disabled { opacity: .65; cursor: wait; }
+.header-actions, .compare-actions { display: flex; align-items: center; gap: 8px; }
+.secondary-button { border: 1px solid #d8deea !important; background: #fff !important; color: #344054 !important; }
+.text-button { border: 0; padding: 8px; background: transparent; color: #657086; cursor: pointer; }
+.file-input { display: none; }
 .error-banner { margin-bottom: 16px; padding: 12px 14px; border: 1px solid #e6b2b2; border-radius: 10px; color: #9e2e2e; background: #fff2f2; font-size: 13px; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
-.summary-grid article, .inventory-card { background: #fff; border: 1px solid #e0e4ec; border-radius: 12px; box-shadow: 0 8px 22px #20345b08; }
+.summary-grid article, .inventory-card, .compare-card { background: #fff; border: 1px solid #e0e4ec; border-radius: 12px; box-shadow: 0 8px 22px #20345b08; }
 .summary-grid article { display: grid; gap: 4px; padding: 16px; }
 .summary-grid span { color: #697386; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 .summary-grid strong { font-size: 25px; }
 .summary-grid small { color: #8a94a6; font-size: 11px; }
 .inventory-card { overflow: hidden; }
+.compare-card { margin-top: 18px; overflow: hidden; }
 .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 18px 20px; border-bottom: 1px solid #e6e9f0; }
 h2 { font-size: 15px; margin: 0 0 4px; }
 .section-heading p { color: #788397; font-size: 11px; margin: 0; }
@@ -46,6 +51,19 @@ h2 { font-size: 15px; margin: 0 0 4px; }
 .version { color: #7c8799; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; }
 .empty-state { padding: 64px 20px; text-align: center; }
 .empty-state p { color: #7d8799; font-size: 12px; }
+.empty-state.compact { padding: 38px 20px; }
+.compare-content { padding: 18px 20px; }
+.compare-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.compare-summary div { display: grid; gap: 4px; padding: 12px; border-radius: 9px; background: #f1f3f7; }
+.compare-summary strong { font-size: 19px; }
+.compare-summary span { color: #737e91; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.difference-group { margin-top: 18px; }
+.difference-group h3 { margin: 0 0 8px; font-size: 12px; }
+.difference-group article { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid #edf0f4; }
+.difference-group article > div { display: grid; gap: 3px; }
+.difference-group article strong { font-size: 12px; }
+.difference-group article span, .difference-group a, .no-source { color: #7d8798; font-size: 10px; }
+.difference-group a { color: #315efb; text-decoration: none; font-weight: 650; }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 178px 1fr; }
@@ -55,11 +73,13 @@ h2 { font-size: 15px; margin: 0 0 4px; }
 @media (prefers-color-scheme: dark) {
   :root { color: #edf1f8; background: #111722; }
   aside { background: #0c111a; }
-  .summary-grid article, .inventory-card { background: #1a2130; border-color: #2b3547; }
+  .summary-grid article, .inventory-card, .compare-card { background: #1a2130; border-color: #2b3547; }
   .section-heading, .extension-list article { border-color: #2b3547; }
   .section-heading input { background: #151c29; border-color: #343e50; }
   .extension-icon { background: #273351; }
   .badge { background: #2a3342; color: #aab3c3; }
   .badge.enabled { background: #173c2a; color: #72d69f; }
+  .secondary-button { background: #1a2130 !important; border-color: #394357 !important; color: #dfe5ef !important; }
+  .compare-summary div { background: #202839; }
+  .difference-group article { border-color: #2b3547; }
 }
-
