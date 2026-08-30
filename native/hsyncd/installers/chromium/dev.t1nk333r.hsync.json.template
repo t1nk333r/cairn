@@ -1,0 +1,7 @@
+{
+  "name": "dev.t1nk333r.hsync",
+  "description": "hsync optional Git companion",
+  "path": "__ABSOLUTE_HSYNCD_PATH__",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://__EXTENSION_ID__/"]
+}

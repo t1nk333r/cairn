@@ -21,15 +21,18 @@ Milestone 1 is underway. The repository currently includes:
   Pull, and SHA-protected commits;
 - a GitHub and GitHub Enterprise repository backend using ordinary commits and
   blob-SHA conflict protection;
+- an optional Go companion scaffold with bounded Native Messaging framing,
+  version negotiation, capability reporting, and browser-specific manifests;
 - runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
   detection;
 - deterministic serialization and inventory-diff primitives;
 - unit tests for capture, filtering, ordering, comparison, import safety, and
   WebDAV behavior.
 
-The optional arbitrary-Git companion, encryption, automatic cross-device merge,
-and guided restore are the next slices. Browser-only repository, WebDAV, and S3
-backends currently expose explicit Pull and Upload operations;
+Arbitrary-Git transport inside the optional companion, encryption, automatic
+cross-device merge, and guided restore are the next slices. Browser-only
+repository, WebDAV, and S3 backends currently expose explicit Pull and Upload
+operations;
 automatic merge is not presented as complete yet.
 
 It records which extensions are installed, compares devices, and guides the
@@ -64,6 +67,7 @@ Requires a current Node.js release and npm.
 ```bash
 npm install
 npm test
+npm run test:native
 npm run typecheck
 npm run build
 npm run build:firefox
