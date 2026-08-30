@@ -15,14 +15,16 @@ Milestone 1 is underway. The repository currently includes:
 - validated local JSON export/import using a separate comparison baseline;
 - a comparison view for missing, local-only, version, and state differences;
 - a WebDAV backend with connection testing, Pull, and protected Upload;
+- an S3-compatible backend with tested AWS Signature V4, path-style and
+  virtual-host addressing, session credentials, Pull, and protected Upload;
 - runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
   detection;
 - deterministic serialization and inventory-diff primitives;
 - unit tests for capture, filtering, ordering, comparison, import safety, and
   WebDAV behavior.
 
-S3, Git/Gitea, encryption, automatic cross-device merge, and guided restore are
-the next slices. WebDAV currently exposes explicit Pull and Upload operations;
+Git/Gitea, encryption, automatic cross-device merge, and guided restore are the
+next slices. WebDAV and S3 currently expose explicit Pull and Upload operations;
 automatic merge is not presented as complete yet.
 
 It records which extensions are installed, compares devices, and guides the
@@ -66,6 +68,9 @@ Unpacked production builds are generated at:
 
 - `.output/chrome-mv3/`
 - `.output/firefox-mv3/`
+
+See [docs/S3_SETUP.md](docs/S3_SETUP.md) for endpoint, addressing, credentials,
+CORS, and conflict requirements.
 
 For live development:
 

@@ -14,6 +14,12 @@ import {
   uploadWebDavInventory,
 } from '../src/browser/webdav-service';
 import { loadWebDavConfig } from '../src/browser/webdav-store';
+import {
+  configureAndTestS3,
+  pullS3Inventory,
+  uploadS3Inventory,
+} from '../src/browser/s3-service';
+import { loadS3Config } from '../src/browser/s3-store';
 
 async function captureAndSave() {
   const inventory = await captureInventory({
@@ -111,6 +117,51 @@ export default defineBackground(() => {
       }
       if (request.type === 'webdav:upload') {
         return uploadWebDavInventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 's3:get-config') {
+        return loadS3Config()
+          .then((config) => ({
+            ok: true as const,
+            s3Config: config
+              ? {
+                  endpoint: config.endpoint,
+                  region: config.region,
+                  bucket: config.bucket,
+                  objectKey: config.objectKey,
+                  forcePathStyle: config.forcePathStyle,
+                  accessKeyId: config.accessKeyId,
+                  hasSessionToken: !!config.sessionToken,
+                }
+              : null,
+          }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 's3:test-and-save') {
+        return configureAndTestS3(request.config)
+          .then(() => ({ ok: true as const }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 's3:pull') {
+        return pullS3Inventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 's3:upload') {
+        return uploadS3Inventory()
           .then((inventory) => ({ ok: true as const, inventory }))
           .catch((error: unknown) => ({
             ok: false as const,

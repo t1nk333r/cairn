@@ -8,6 +8,7 @@ import {
   type InventoryDocument,
 } from '../../src/core/inventory';
 import { normalizeWebDavConfig, webDavOriginPattern } from '../../src/backends/webdav';
+import { normalizeS3Config, s3OriginPattern } from '../../src/backends/s3';
 import type { StoredWebDavConfig } from '../../src/browser/webdav-store';
 import './style.css';
 
@@ -37,11 +38,22 @@ function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [remoteBusy, setRemoteBusy] = useState<string | null>(null);
   const [webdavSaved, setWebdavSaved] = useState(false);
+  const [s3Saved, setS3Saved] = useState(false);
   const [webdav, setWebdav] = useState({
     baseUrl: '',
     fileName: 'hsync.json',
     username: '',
     password: '',
+  });
+  const [s3, setS3] = useState({
+    endpoint: 'https://s3.amazonaws.com',
+    region: 'us-east-1',
+    bucket: '',
+    objectKey: 'hsync.json',
+    forcePathStyle: false,
+    accessKeyId: '',
+    secretAccessKey: '',
+    sessionToken: '',
   });
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -66,6 +78,16 @@ function App() {
   useEffect(() => {
     void sendRequest({ type: 'baseline:get' }).then((response) => {
       if (response.ok && 'inventory' in response) setBaseline(response.inventory);
+    });
+  }, []);
+
+  useEffect(() => {
+    void sendRequest({ type: 's3:get-config' }).then((response) => {
+      if (response.ok && 's3Config' in response && response.s3Config) {
+        const { hasSessionToken: _hasSessionToken, ...publicConfig } = response.s3Config;
+        setS3((current) => ({ ...current, ...publicConfig }));
+        setS3Saved(true);
+      }
     });
   }, []);
 
@@ -145,6 +167,51 @@ function App() {
         action === 'pull'
           ? 'Remote inventory pulled into Compare.'
           : 'Local inventory uploaded with conflict protection.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const testAndSaveS3 = async () => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('s3-test');
+    try {
+      const normalized = normalizeS3Config(s3);
+      const granted = await browser.permissions.request({
+        origins: [s3OriginPattern(normalized)],
+      });
+      if (!granted) throw new Error('S3 endpoint access was not granted.');
+      const response = await sendRequest({
+        type: 's3:test-and-save',
+        config: normalized,
+      });
+      if (!response.ok) throw new Error(response.error);
+      setS3({ ...normalized, sessionToken: normalized.sessionToken ?? '' });
+      setS3Saved(true);
+      setNotice('S3 connection verified and saved locally.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const runS3Action = async (action: 'pull' | 'upload') => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy(`s3-${action}`);
+    try {
+      const response = await sendRequest({ type: `s3:${action}` });
+      if (!response.ok) throw new Error(response.error);
+      if (action === 'pull' && 'inventory' in response) setBaseline(response.inventory);
+      setNotice(
+        action === 'pull'
+          ? 'S3 inventory pulled into Compare.'
+          : 'Local inventory uploaded to S3 with conflict protection.',
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -332,6 +399,124 @@ function App() {
               </button>
               <button disabled={!webdavSaved || !inventory || remoteBusy !== null} onClick={() => void runWebDavAction('upload')}>
                 {remoteBusy === 'upload' ? 'Uploading…' : 'Upload local'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="connection-card" id="s3-connection">
+          <div className="section-heading">
+            <div>
+              <h2>S3-compatible connection</h2>
+              <p>AWS S3, Cloudflare R2, MinIO, RustFS, or another SigV4-compatible service.</p>
+            </div>
+            <span className={`connection-status ${s3Saved ? 'connected' : ''}`}>
+              {s3Saved ? 'Configured' : 'Not configured'}
+            </span>
+          </div>
+          <div className="connection-content">
+            <label className="wide-field">
+              <span>Endpoint</span>
+              <input
+                type="url"
+                placeholder="https://s3.amazonaws.com"
+                value={s3.endpoint}
+                onChange={(event) => {
+                  setS3Saved(false);
+                  setS3((current) => ({ ...current, endpoint: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Region</span>
+              <input
+                placeholder="us-east-1"
+                value={s3.region}
+                onChange={(event) => {
+                  setS3Saved(false);
+                  setS3((current) => ({ ...current, region: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Bucket</span>
+              <input
+                value={s3.bucket}
+                onChange={(event) => {
+                  setS3Saved(false);
+                  setS3((current) => ({ ...current, bucket: event.target.value }));
+                }}
+              />
+            </label>
+            <label className="wide-field">
+              <span>Object key</span>
+              <input
+                placeholder="hsync.json"
+                value={s3.objectKey}
+                onChange={(event) => {
+                  setS3Saved(false);
+                  setS3((current) => ({ ...current, objectKey: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Access key ID</span>
+              <input
+                autoComplete="username"
+                value={s3.accessKeyId}
+                onChange={(event) => {
+                  setS3Saved(false);
+                  setS3((current) => ({ ...current, accessKeyId: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Secret access key</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder={s3Saved ? 'Enter again only to change or retest' : ''}
+                value={s3.secretAccessKey}
+                onChange={(event) => {
+                  setS3Saved(false);
+                  setS3((current) => ({ ...current, secretAccessKey: event.target.value }));
+                }}
+              />
+            </label>
+            <label className="wide-field">
+              <span>Session token (optional)</span>
+              <input
+                type="password"
+                value={s3.sessionToken}
+                onChange={(event) => {
+                  setS3Saved(false);
+                  setS3((current) => ({ ...current, sessionToken: event.target.value }));
+                }}
+              />
+            </label>
+            <label className="checkbox-field wide-field">
+              <input
+                type="checkbox"
+                checked={s3.forcePathStyle}
+                onChange={(event) => {
+                  setS3Saved(false);
+                  setS3((current) => ({ ...current, forcePathStyle: event.target.checked }));
+                }}
+              />
+              <span>Use path-style addressing (recommended for MinIO, RustFS, localhost, and buckets containing dots)</span>
+            </label>
+            <p className="cors-note wide-field">The bucket must allow GET, HEAD, and PUT from this extension and expose the ETag response header through CORS.</p>
+          </div>
+          <div className="connection-footer">
+            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveS3()}>
+              {remoteBusy === 's3-test' ? 'Testing…' : 'Test & save'}
+            </button>
+            <div>
+              <button className="secondary-button" disabled={!s3Saved || remoteBusy !== null} onClick={() => void runS3Action('pull')}>
+                {remoteBusy === 's3-pull' ? 'Pulling…' : 'Pull'}
+              </button>
+              <button disabled={!s3Saved || !inventory || remoteBusy !== null} onClick={() => void runS3Action('upload')}>
+                {remoteBusy === 's3-upload' ? 'Uploading…' : 'Upload local'}
               </button>
             </div>
           </div>
