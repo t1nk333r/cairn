@@ -12,6 +12,7 @@ import { normalizeS3Config, s3OriginPattern } from '../../src/backends/s3';
 import { giteaOriginPattern, normalizeGiteaConfig } from '../../src/backends/gitea';
 import { gitHubOriginPattern, normalizeGitHubConfig } from '../../src/backends/github';
 import type { StoredWebDavConfig } from '../../src/browser/webdav-store';
+import type { NativeHello } from '../../src/native/protocol';
 import './style.css';
 
 async function sendRequest(request: HsyncRequest) {
@@ -43,6 +44,7 @@ function App() {
   const [s3Saved, setS3Saved] = useState(false);
   const [giteaSaved, setGiteaSaved] = useState(false);
   const [githubSaved, setGitHubSaved] = useState(false);
+  const [nativeCompanion, setNativeCompanion] = useState<NativeHello | null>(null);
   const [webdav, setWebdav] = useState({
     baseUrl: '',
     fileName: 'hsync.json',
@@ -345,6 +347,28 @@ function App() {
     }
   };
 
+  const detectCompanion = async () => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('native-detect');
+    try {
+      const granted = await browser.permissions.request({
+        permissions: ['nativeMessaging'],
+      });
+      if (!granted) throw new Error('Native companion access was not granted.');
+      const response = await sendRequest({ type: 'native:detect' });
+      if (!response.ok) throw new Error(response.error);
+      if (!('nativeCompanion' in response)) throw new Error('The companion handshake was incomplete.');
+      setNativeCompanion(response.nativeCompanion);
+      setNotice(`hsyncd ${response.nativeCompanion.hostVersion} is connected.`);
+    } catch (cause) {
+      setNativeCompanion(null);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
   const clearBaseline = async () => {
     const response = await sendRequest({ type: 'baseline:clear' });
     if (!response.ok) {
@@ -456,6 +480,36 @@ function App() {
         </section>
 
         <section className="connection-card" id="connections">
+          <div className="section-heading">
+            <div>
+              <h2>Native Git companion</h2>
+              <p>Optional support for arbitrary Git HTTPS and SSH remotes.</p>
+            </div>
+            <span className={`connection-status ${nativeCompanion ? 'connected' : ''}`}>
+              {nativeCompanion ? `Connected · ${nativeCompanion.hostVersion}` : 'Not detected'}
+            </span>
+          </div>
+          <div className="connection-content">
+            <p className="cors-note wide-field">
+              hsyncd is optional. The current companion build supports secure protocol
+              negotiation only; Git transport controls stay hidden until the installed
+              companion advertises them.
+            </p>
+            {nativeCompanion && (
+              <p className="cors-note wide-field">
+                Capabilities: {nativeCompanion.capabilities.join(', ') || 'none'} · Protocols:{' '}
+                {nativeCompanion.protocolVersions.join(', ')}
+              </p>
+            )}
+          </div>
+          <div className="connection-footer">
+            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void detectCompanion()}>
+              {remoteBusy === 'native-detect' ? 'Checking…' : 'Detect companion'}
+            </button>
+          </div>
+        </section>
+
+        <section className="connection-card" id="github-connection">
           <div className="section-heading">
             <div>
               <h2>Git repository connection</h2>

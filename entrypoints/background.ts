@@ -32,6 +32,7 @@ import {
   uploadGitHubInventory,
 } from '../src/browser/github-service';
 import { loadGitHubConfig } from '../src/browser/github-store';
+import { detectNativeCompanion } from '../src/browser/native-service';
 
 async function captureAndSave() {
   const inventory = await captureInventory({
@@ -261,6 +262,14 @@ export default defineBackground(() => {
       if (request.type === 'github:upload') {
         return uploadGitHubInventory()
           .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'native:detect') {
+        return detectNativeCompanion()
+          .then((nativeCompanion) => ({ ok: true as const, nativeCompanion }))
           .catch((error: unknown) => ({
             ok: false as const,
             error: error instanceof Error ? error.message : String(error),

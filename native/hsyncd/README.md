@@ -6,6 +6,9 @@ updates for users who choose that backend.
 
 The current scaffold implements only protocol negotiation. It does not yet
 clone repositories, store credentials, or advertise those capabilities.
+The extension requests its optional Native Messaging permission only when the
+user selects **Detect companion**, then validates the correlated hello response
+and displays the companion version and advertised capabilities.
 
 ## Development
 

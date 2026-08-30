@@ -23,6 +23,8 @@ Milestone 1 is underway. The repository currently includes:
   blob-SHA conflict protection;
 - an optional Go companion scaffold with bounded Native Messaging framing,
   version negotiation, capability reporting, and browser-specific manifests;
+- a user-triggered companion detector with optional Native Messaging permission,
+  correlated handshakes, and validated host identity/capabilities;
 - runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
   detection;
 - deterministic serialization and inventory-diff primitives;

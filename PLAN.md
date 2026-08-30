@@ -247,7 +247,7 @@ target S3-compatible service without losing concurrent changes.
 - Document the boundary between API-backed Git and arbitrary Git remotes.
 - Scaffold the optional Go native companion and a versioned Native Messaging
   protocol. (Implemented: framing, negotiation, capability reporting, and
-  Chromium/Firefox manifest templates.)
+  Chromium/Firefox manifest templates, plus extension-side detection.)
 - Add arbitrary Git clone/fetch/commit/push with SSH agent and HTTPS-token
   authentication.
 - Store companion credentials in the OS keyring and ship registration helpers
