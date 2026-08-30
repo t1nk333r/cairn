@@ -20,6 +20,12 @@ import {
   uploadS3Inventory,
 } from '../src/browser/s3-service';
 import { loadS3Config } from '../src/browser/s3-store';
+import {
+  configureAndTestGitea,
+  pullGiteaInventory,
+  uploadGiteaInventory,
+} from '../src/browser/gitea-service';
+import { loadGiteaConfig } from '../src/browser/gitea-store';
 
 async function captureAndSave() {
   const inventory = await captureInventory({
@@ -162,6 +168,49 @@ export default defineBackground(() => {
       }
       if (request.type === 's3:upload') {
         return uploadS3Inventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'gitea:get-config') {
+        return loadGiteaConfig()
+          .then((config) => ({
+            ok: true as const,
+            giteaConfig: config
+              ? {
+                  baseUrl: config.baseUrl,
+                  owner: config.owner,
+                  repo: config.repo,
+                  branch: config.branch,
+                  filePath: config.filePath,
+                }
+              : null,
+          }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'gitea:test-and-save') {
+        return configureAndTestGitea(request.config)
+          .then(() => ({ ok: true as const }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'gitea:pull') {
+        return pullGiteaInventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'gitea:upload') {
+        return uploadGiteaInventory()
           .then((inventory) => ({ ok: true as const, inventory }))
           .catch((error: unknown) => ({
             ok: false as const,

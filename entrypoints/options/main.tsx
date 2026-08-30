@@ -9,6 +9,7 @@ import {
 } from '../../src/core/inventory';
 import { normalizeWebDavConfig, webDavOriginPattern } from '../../src/backends/webdav';
 import { normalizeS3Config, s3OriginPattern } from '../../src/backends/s3';
+import { giteaOriginPattern, normalizeGiteaConfig } from '../../src/backends/gitea';
 import type { StoredWebDavConfig } from '../../src/browser/webdav-store';
 import './style.css';
 
@@ -39,6 +40,7 @@ function App() {
   const [remoteBusy, setRemoteBusy] = useState<string | null>(null);
   const [webdavSaved, setWebdavSaved] = useState(false);
   const [s3Saved, setS3Saved] = useState(false);
+  const [giteaSaved, setGiteaSaved] = useState(false);
   const [webdav, setWebdav] = useState({
     baseUrl: '',
     fileName: 'hsync.json',
@@ -54,6 +56,14 @@ function App() {
     accessKeyId: '',
     secretAccessKey: '',
     sessionToken: '',
+  });
+  const [gitea, setGitea] = useState({
+    baseUrl: 'https://gitea.com',
+    token: '',
+    owner: '',
+    repo: '',
+    branch: 'main',
+    filePath: 'hsync.json',
   });
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -78,6 +88,15 @@ function App() {
   useEffect(() => {
     void sendRequest({ type: 'baseline:get' }).then((response) => {
       if (response.ok && 'inventory' in response) setBaseline(response.inventory);
+    });
+  }, []);
+
+  useEffect(() => {
+    void sendRequest({ type: 'gitea:get-config' }).then((response) => {
+      if (response.ok && 'giteaConfig' in response && response.giteaConfig) {
+        setGitea((current) => ({ ...current, ...response.giteaConfig }));
+        setGiteaSaved(true);
+      }
     });
   }, []);
 
@@ -220,6 +239,51 @@ function App() {
     }
   };
 
+  const testAndSaveGitea = async () => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('gitea-test');
+    try {
+      const normalized = normalizeGiteaConfig(gitea);
+      const granted = await browser.permissions.request({
+        origins: [giteaOriginPattern(normalized.baseUrl)],
+      });
+      if (!granted) throw new Error('Gitea endpoint access was not granted.');
+      const response = await sendRequest({
+        type: 'gitea:test-and-save',
+        config: normalized,
+      });
+      if (!response.ok) throw new Error(response.error);
+      setGitea(normalized);
+      setGiteaSaved(true);
+      setNotice('Gitea connection verified and saved locally.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const runGiteaAction = async (action: 'pull' | 'upload') => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy(`gitea-${action}`);
+    try {
+      const response = await sendRequest({ type: `gitea:${action}` });
+      if (!response.ok) throw new Error(response.error);
+      if (action === 'pull' && 'inventory' in response) setBaseline(response.inventory);
+      setNotice(
+        action === 'pull'
+          ? 'Gitea inventory pulled into Compare.'
+          : 'Local inventory committed to Gitea with conflict protection.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
   const clearBaseline = async () => {
     const response = await sendRequest({ type: 'baseline:clear' });
     if (!response.ok) {
@@ -331,6 +395,99 @@ function App() {
         </section>
 
         <section className="connection-card" id="connections">
+          <div className="section-heading">
+            <div>
+              <h2>Gitea connection</h2>
+              <p>Commit the inventory to a repository on gitea.com or a private Gitea instance.</p>
+            </div>
+            <span className={`connection-status ${giteaSaved ? 'connected' : ''}`}>
+              {giteaSaved ? 'Configured' : 'Not configured'}
+            </span>
+          </div>
+          <div className="connection-content">
+            <label className="wide-field">
+              <span>Instance URL</span>
+              <input
+                type="url"
+                placeholder="https://gitea.example.com"
+                value={gitea.baseUrl}
+                onChange={(event) => {
+                  setGiteaSaved(false);
+                  setGitea((current) => ({ ...current, baseUrl: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Owner</span>
+              <input
+                value={gitea.owner}
+                onChange={(event) => {
+                  setGiteaSaved(false);
+                  setGitea((current) => ({ ...current, owner: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Repository</span>
+              <input
+                value={gitea.repo}
+                onChange={(event) => {
+                  setGiteaSaved(false);
+                  setGitea((current) => ({ ...current, repo: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Branch</span>
+              <input
+                value={gitea.branch}
+                onChange={(event) => {
+                  setGiteaSaved(false);
+                  setGitea((current) => ({ ...current, branch: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>File path</span>
+              <input
+                value={gitea.filePath}
+                onChange={(event) => {
+                  setGiteaSaved(false);
+                  setGitea((current) => ({ ...current, filePath: event.target.value }));
+                }}
+              />
+            </label>
+            <label className="wide-field">
+              <span>Access token</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder={giteaSaved ? 'Enter again only to change or retest' : ''}
+                value={gitea.token}
+                onChange={(event) => {
+                  setGiteaSaved(false);
+                  setGitea((current) => ({ ...current, token: event.target.value }));
+                }}
+              />
+              <small>Use a token restricted to repository read/write access. It stays in this browser profile.</small>
+            </label>
+          </div>
+          <div className="connection-footer">
+            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveGitea()}>
+              {remoteBusy === 'gitea-test' ? 'Testing…' : 'Test & save'}
+            </button>
+            <div>
+              <button className="secondary-button" disabled={!giteaSaved || remoteBusy !== null} onClick={() => void runGiteaAction('pull')}>
+                {remoteBusy === 'gitea-pull' ? 'Pulling…' : 'Pull'}
+              </button>
+              <button disabled={!giteaSaved || !inventory || remoteBusy !== null} onClick={() => void runGiteaAction('upload')}>
+                {remoteBusy === 'gitea-upload' ? 'Committing…' : 'Commit local'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="connection-card" id="webdav-connection">
           <div className="section-heading">
             <div>
               <h2>WebDAV connection</h2>

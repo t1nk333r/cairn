@@ -17,14 +17,17 @@ Milestone 1 is underway. The repository currently includes:
 - a WebDAV backend with connection testing, Pull, and protected Upload;
 - an S3-compatible backend with tested AWS Signature V4, path-style and
   virtual-host addressing, session credentials, Pull, and protected Upload;
+- a Gitea repository backend with token authentication, branch validation,
+  Pull, and SHA-protected commits;
 - runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
   detection;
 - deterministic serialization and inventory-diff primitives;
 - unit tests for capture, filtering, ordering, comparison, import safety, and
   WebDAV behavior.
 
-Git/Gitea, encryption, automatic cross-device merge, and guided restore are the
-next slices. WebDAV and S3 currently expose explicit Pull and Upload operations;
+Generic Git hosting, encryption, automatic cross-device merge, and guided
+restore are the next slices. WebDAV, S3, and Gitea currently expose explicit
+Pull and Upload operations;
 automatic merge is not presented as complete yet.
 
 It records which extensions are installed, compares devices, and guides the
@@ -71,6 +74,9 @@ Unpacked production builds are generated at:
 
 See [docs/S3_SETUP.md](docs/S3_SETUP.md) for endpoint, addressing, credentials,
 CORS, and conflict requirements.
+
+See [docs/GITEA_SETUP.md](docs/GITEA_SETUP.md) for repository, branch, token,
+and conflict-protection guidance.
 
 For live development:
 
