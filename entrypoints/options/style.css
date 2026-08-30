@@ -27,14 +27,16 @@ header button:disabled { opacity: .65; cursor: wait; }
 .text-button { border: 0; padding: 8px; background: transparent; color: #657086; cursor: pointer; }
 .file-input { display: none; }
 .error-banner { margin-bottom: 16px; padding: 12px 14px; border: 1px solid #e6b2b2; border-radius: 10px; color: #9e2e2e; background: #fff2f2; font-size: 13px; }
+.success-banner { margin-bottom: 16px; padding: 12px 14px; border: 1px solid #a9d7bd; border-radius: 10px; color: #17663e; background: #edf9f2; font-size: 13px; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
-.summary-grid article, .inventory-card, .compare-card { background: #fff; border: 1px solid #e0e4ec; border-radius: 12px; box-shadow: 0 8px 22px #20345b08; }
+.summary-grid article, .inventory-card, .compare-card, .connection-card { background: #fff; border: 1px solid #e0e4ec; border-radius: 12px; box-shadow: 0 8px 22px #20345b08; }
 .summary-grid article { display: grid; gap: 4px; padding: 16px; }
 .summary-grid span { color: #697386; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 .summary-grid strong { font-size: 25px; }
 .summary-grid small { color: #8a94a6; font-size: 11px; }
 .inventory-card { overflow: hidden; }
 .compare-card { margin-top: 18px; overflow: hidden; }
+.connection-card { margin-top: 18px; overflow: hidden; }
 .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 18px 20px; border-bottom: 1px solid #e6e9f0; }
 h2 { font-size: 15px; margin: 0 0 4px; }
 .section-heading p { color: #788397; font-size: 11px; margin: 0; }
@@ -64,6 +66,19 @@ h2 { font-size: 15px; margin: 0 0 4px; }
 .difference-group article strong { font-size: 12px; }
 .difference-group article span, .difference-group a, .no-source { color: #7d8798; font-size: 10px; }
 .difference-group a { color: #315efb; text-decoration: none; font-weight: 650; }
+.connection-status { padding: 5px 9px; border-radius: 999px; color: #737e91; background: #edf0f4; font-size: 10px; font-weight: 700; }
+.connection-status.connected { color: #197447; background: #e3f5eb; }
+.connection-content { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 20px; }
+.connection-content label { display: grid; gap: 6px; }
+.connection-content label > span { color: #5f6a7d; font-size: 11px; font-weight: 700; }
+.connection-content label > small { color: #8a94a6; font-size: 10px; }
+.connection-content .wide-field { grid-column: 1 / -1; }
+.connection-content input { width: 100%; border: 1px solid #d8deea; border-radius: 8px; background: #f8f9fb; color: inherit; padding: 10px 11px; font-size: 12px; outline: none; }
+.connection-content input:focus { border-color: #315efb; box-shadow: 0 0 0 3px #315efb18; }
+.connection-footer { display: flex; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid #e6e9f0; }
+.connection-footer > div { display: flex; gap: 8px; }
+.connection-footer button { border: 0; border-radius: 8px; padding: 9px 13px; background: #315efb; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.connection-footer button:disabled { opacity: .55; cursor: not-allowed; }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 178px 1fr; }
@@ -73,7 +88,7 @@ h2 { font-size: 15px; margin: 0 0 4px; }
 @media (prefers-color-scheme: dark) {
   :root { color: #edf1f8; background: #111722; }
   aside { background: #0c111a; }
-  .summary-grid article, .inventory-card, .compare-card { background: #1a2130; border-color: #2b3547; }
+  .summary-grid article, .inventory-card, .compare-card, .connection-card { background: #1a2130; border-color: #2b3547; }
   .section-heading, .extension-list article { border-color: #2b3547; }
   .section-heading input { background: #151c29; border-color: #343e50; }
   .extension-icon { background: #273351; }
@@ -82,4 +97,7 @@ h2 { font-size: 15px; margin: 0 0 4px; }
   .secondary-button { background: #1a2130 !important; border-color: #394357 !important; color: #dfe5ef !important; }
   .compare-summary div { background: #202839; }
   .difference-group article { border-color: #2b3547; }
+  .connection-content input { background: #151c29; border-color: #343e50; }
+  .connection-footer { border-color: #2b3547; }
+  .success-banner { background: #143424; border-color: #286245; color: #82dca9; }
 }

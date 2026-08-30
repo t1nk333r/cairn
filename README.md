@@ -14,12 +14,16 @@ Milestone 1 is underway. The repository currently includes:
 - a compact popup and full-page inventory control center;
 - validated local JSON export/import using a separate comparison baseline;
 - a comparison view for missing, local-only, version, and state differences;
+- a WebDAV backend with connection testing, Pull, and protected Upload;
+- runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
+  detection;
 - deterministic serialization and inventory-diff primitives;
-- unit tests for capture, filtering, ordering, comparison, and import safety.
+- unit tests for capture, filtering, ordering, comparison, import safety, and
+  WebDAV behavior.
 
-Remote connections, encryption, cross-device merge, and guided restore are the
-next slices; the current UI labels those areas rather than pretending they are
-already connected.
+S3, Git/Gitea, encryption, automatic cross-device merge, and guided restore are
+the next slices. WebDAV currently exposes explicit Pull and Upload operations;
+automatic merge is not presented as complete yet.
 
 It records which extensions are installed, compares devices, and guides the
 user through restoring missing extensions. Inventories can be stored in:

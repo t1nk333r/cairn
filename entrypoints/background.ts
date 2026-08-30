@@ -8,6 +8,12 @@ import {
 } from '../src/browser/inventory-store';
 import type { HsyncRequest, HsyncResponse } from '../src/browser/messages';
 import { captureInventory } from '../src/core/inventory';
+import {
+  configureAndTestWebDav,
+  pullWebDavInventory,
+  uploadWebDavInventory,
+} from '../src/browser/webdav-service';
+import { loadWebDavConfig } from '../src/browser/webdav-store';
 
 async function captureAndSave() {
   const inventory = await captureInventory({
@@ -65,6 +71,47 @@ export default defineBackground(() => {
       if (request.type === 'baseline:clear') {
         return clearComparisonBaseline()
           .then(() => ({ ok: true as const, inventory: null }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'webdav:get-config') {
+        return loadWebDavConfig()
+          .then((config) => ({
+            ok: true as const,
+            webdavConfig: config
+              ? {
+                  baseUrl: config.baseUrl,
+                  fileName: config.fileName,
+                  username: config.username,
+                }
+              : null,
+          }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'webdav:test-and-save') {
+        return configureAndTestWebDav(request.config)
+          .then(() => ({ ok: true as const }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'webdav:pull') {
+        return pullWebDavInventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'webdav:upload') {
+        return uploadWebDavInventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
           .catch((error: unknown) => ({
             ok: false as const,
             error: error instanceof Error ? error.message : String(error),

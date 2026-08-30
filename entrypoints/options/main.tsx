@@ -7,6 +7,8 @@ import {
   serializeInventory,
   type InventoryDocument,
 } from '../../src/core/inventory';
+import { normalizeWebDavConfig, webDavOriginPattern } from '../../src/backends/webdav';
+import type { StoredWebDavConfig } from '../../src/browser/webdav-store';
 import './style.css';
 
 async function sendRequest(request: HsyncRequest) {
@@ -32,6 +34,15 @@ function App() {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [remoteBusy, setRemoteBusy] = useState<string | null>(null);
+  const [webdavSaved, setWebdavSaved] = useState(false);
+  const [webdav, setWebdav] = useState({
+    baseUrl: '',
+    fileName: 'hsync.json',
+    username: '',
+    password: '',
+  });
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (capture = false) => {
@@ -55,6 +66,15 @@ function App() {
   useEffect(() => {
     void sendRequest({ type: 'baseline:get' }).then((response) => {
       if (response.ok && 'inventory' in response) setBaseline(response.inventory);
+    });
+  }, []);
+
+  useEffect(() => {
+    void sendRequest({ type: 'webdav:get-config' }).then((response) => {
+      if (response.ok && 'webdavConfig' in response && response.webdavConfig) {
+        setWebdav((current) => ({ ...current, ...response.webdavConfig }));
+        setWebdavSaved(true);
+      }
     });
   }, []);
 
@@ -83,6 +103,53 @@ function App() {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       if (fileInput.current) fileInput.current.value = '';
+    }
+  };
+
+  const testAndSaveWebDav = async () => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('test');
+    try {
+      const normalized = normalizeWebDavConfig(webdav);
+      const granted = await browser.permissions.request({
+        origins: [webDavOriginPattern(normalized.baseUrl)],
+      });
+      if (!granted) throw new Error('Endpoint access was not granted.');
+      const response = await sendRequest({
+        type: 'webdav:test-and-save',
+        config: normalized,
+      });
+      if (!response.ok) throw new Error(response.error);
+      setWebdav(normalized);
+      setWebdavSaved(true);
+      setNotice('WebDAV connection verified and saved locally.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const runWebDavAction = async (action: 'pull' | 'upload') => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy(action);
+    try {
+      const response = await sendRequest({ type: `webdav:${action}` });
+      if (!response.ok) throw new Error(response.error);
+      if (action === 'pull' && 'inventory' in response) {
+        setBaseline(response.inventory);
+      }
+      setNotice(
+        action === 'pull'
+          ? 'Remote inventory pulled into Compare.'
+          : 'Local inventory uploaded with conflict protection.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
     }
   };
 
@@ -120,6 +187,7 @@ function App() {
         </header>
 
         {error && <div className="error-banner">{error}</div>}
+        {notice && <div className="success-banner">{notice}</div>}
 
         <section className="summary-grid" id="overview">
           <article><span>Installed</span><strong>{inventory?.extensions.length ?? '—'}</strong><small>on this device</small></article>
@@ -193,6 +261,80 @@ function App() {
           ) : (
             <div className="empty-state compact"><strong>No comparison inventory</strong><p>Export on one device and import on another. Remote backends will automate this next.</p></div>
           )}
+        </section>
+
+        <section className="connection-card" id="connections">
+          <div className="section-heading">
+            <div>
+              <h2>WebDAV connection</h2>
+              <p>Nextcloud, Synology, or another HTTPS WebDAV folder.</p>
+            </div>
+            <span className={`connection-status ${webdavSaved ? 'connected' : ''}`}>
+              {webdavSaved ? 'Configured' : 'Not configured'}
+            </span>
+          </div>
+          <div className="connection-content">
+            <label className="wide-field">
+              <span>Folder URL</span>
+              <input
+                type="url"
+                placeholder="https://cloud.example.com/remote.php/dav/files/user/hsync/"
+                value={webdav.baseUrl}
+                onChange={(event) => {
+                  setWebdavSaved(false);
+                  setWebdav((current) => ({ ...current, baseUrl: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>File name</span>
+              <input
+                value={webdav.fileName}
+                onChange={(event) => {
+                  setWebdavSaved(false);
+                  setWebdav((current) => ({ ...current, fileName: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Username</span>
+              <input
+                autoComplete="username"
+                value={webdav.username}
+                onChange={(event) => {
+                  setWebdavSaved(false);
+                  setWebdav((current) => ({ ...current, username: event.target.value }));
+                }}
+              />
+            </label>
+            <label className="wide-field">
+              <span>Password or app password</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder={webdavSaved ? 'Enter again only to change or retest' : ''}
+                value={webdav.password}
+                onChange={(event) => {
+                  setWebdavSaved(false);
+                  setWebdav((current) => ({ ...current, password: event.target.value }));
+                }}
+              />
+              <small>Stored only in this browser profile. HTTPS is required except on localhost.</small>
+            </label>
+          </div>
+          <div className="connection-footer">
+            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveWebDav()}>
+              {remoteBusy === 'test' ? 'Testing…' : 'Test & save'}
+            </button>
+            <div>
+              <button className="secondary-button" disabled={!webdavSaved || remoteBusy !== null} onClick={() => void runWebDavAction('pull')}>
+                {remoteBusy === 'pull' ? 'Pulling…' : 'Pull'}
+              </button>
+              <button disabled={!webdavSaved || !inventory || remoteBusy !== null} onClick={() => void runWebDavAction('upload')}>
+                {remoteBusy === 'upload' ? 'Uploading…' : 'Upload local'}
+              </button>
+            </div>
+          </div>
         </section>
       </main>
     </div>
