@@ -1,0 +1,40 @@
+:root {
+  color: #1d2433;
+  background: #f4f6f9;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 380px; }
+button { font: inherit; }
+
+.popup-shell { padding: 16px; }
+.topbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.topbar > div:nth-child(2) { display: grid; gap: 1px; }
+.topbar strong { font-size: 15px; letter-spacing: -.01em; }
+.topbar span { color: #697386; font-size: 11px; }
+.brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: white; background: #315efb; font-weight: 800; }
+.icon-button { margin-left: auto; border: 1px solid #d9deea; border-radius: 8px; background: #fff; color: #4b5568; width: 32px; height: 32px; cursor: pointer; }
+.status-card { background: #fff; border: 1px solid #e0e4ec; border-radius: 12px; padding: 14px; box-shadow: 0 6px 18px #20345b0a; }
+.status-card p { color: #697386; font-size: 12px; line-height: 1.45; margin: 6px 0 0; }
+.status-line { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.status-dot { width: 8px; height: 8px; border-radius: 999px; background: #20a464; box-shadow: 0 0 0 3px #20a46420; }
+.status-dot.error { background: #c94343; box-shadow: 0 0 0 3px #c9434320; }
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.metrics div { display: grid; gap: 3px; padding: 11px; background: #e9edf4; border-radius: 10px; }
+.metrics strong { font-size: 17px; }
+.metrics span { color: #697386; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.primary-button { width: 100%; border: 0; border-radius: 10px; padding: 11px 14px; color: white; background: #315efb; font-weight: 700; cursor: pointer; }
+.primary-button:disabled { cursor: wait; opacity: .7; }
+footer { display: flex; justify-content: space-between; align-items: center; color: #697386; font-size: 11px; margin-top: 12px; }
+footer button { border: 0; padding: 0; color: #315efb; background: none; cursor: pointer; font-weight: 650; }
+
+@media (prefers-color-scheme: dark) {
+  :root { color: #eef2fa; background: #121722; }
+  .topbar span, .status-card p, footer, .metrics span { color: #98a2b6; }
+  .status-card { background: #1a2130; border-color: #2c3547; }
+  .metrics div { background: #202839; }
+  .icon-button { background: #1a2130; border-color: #30394b; color: #d8deea; }
+}
+

@@ -1,9 +1,10 @@
 node_modules/
 dist/
+.output/
+.wxt/
 coverage/
 .env
 .env.*
 !.env.example
 .DS_Store
 *.log
-
