@@ -2,6 +2,7 @@ import type { InventoryDocument } from '../core/inventory';
 import type { StoredWebDavConfig } from './webdav-store';
 import type { StoredS3Config } from './s3-store';
 import type { StoredGiteaConfig } from './gitea-store';
+import type { StoredGitHubConfig } from './github-store';
 
 export type HsyncRequest =
   | { type: 'inventory:capture' }
@@ -33,6 +34,13 @@ export type HsyncRequest =
   | { type: 'gitea:get-config' }
   | { type: 'gitea:pull' }
   | { type: 'gitea:upload' }
+  | {
+      type: 'github:test-and-save';
+      config: StoredGitHubConfig & { token: string };
+    }
+  | { type: 'github:get-config' }
+  | { type: 'github:pull' }
+  | { type: 'github:upload' }
   | { type: 'options:open' };
 
 export type HsyncResponse =
@@ -40,5 +48,6 @@ export type HsyncResponse =
   | { ok: true; webdavConfig: StoredWebDavConfig | null }
   | { ok: true; s3Config: StoredS3Config | null }
   | { ok: true; giteaConfig: StoredGiteaConfig | null }
+  | { ok: true; githubConfig: StoredGitHubConfig | null }
   | { ok: true }
   | { ok: false; error: string };

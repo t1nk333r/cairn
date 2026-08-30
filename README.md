@@ -19,15 +19,17 @@ Milestone 1 is underway. The repository currently includes:
   virtual-host addressing, session credentials, Pull, and protected Upload;
 - a Gitea repository backend with token authentication, branch validation,
   Pull, and SHA-protected commits;
+- a GitHub and GitHub Enterprise repository backend using ordinary commits and
+  blob-SHA conflict protection;
 - runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
   detection;
 - deterministic serialization and inventory-diff primitives;
 - unit tests for capture, filtering, ordering, comparison, import safety, and
   WebDAV behavior.
 
-Generic Git hosting, encryption, automatic cross-device merge, and guided
-restore are the next slices. WebDAV, S3, and Gitea currently expose explicit
-Pull and Upload operations;
+The optional arbitrary-Git companion, encryption, automatic cross-device merge,
+and guided restore are the next slices. Browser-only repository, WebDAV, and S3
+backends currently expose explicit Pull and Upload operations;
 automatic merge is not presented as complete yet.
 
 It records which extensions are installed, compares devices, and guides the
@@ -77,6 +79,9 @@ CORS, and conflict requirements.
 
 See [docs/GITEA_SETUP.md](docs/GITEA_SETUP.md) for repository, branch, token,
 and conflict-protection guidance.
+
+See [docs/GITHUB_SETUP.md](docs/GITHUB_SETUP.md) for GitHub, GitHub Enterprise,
+fine-grained token, and branch setup.
 
 For live development:
 

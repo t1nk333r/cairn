@@ -10,6 +10,7 @@ import {
 import { normalizeWebDavConfig, webDavOriginPattern } from '../../src/backends/webdav';
 import { normalizeS3Config, s3OriginPattern } from '../../src/backends/s3';
 import { giteaOriginPattern, normalizeGiteaConfig } from '../../src/backends/gitea';
+import { gitHubOriginPattern, normalizeGitHubConfig } from '../../src/backends/github';
 import type { StoredWebDavConfig } from '../../src/browser/webdav-store';
 import './style.css';
 
@@ -41,6 +42,7 @@ function App() {
   const [webdavSaved, setWebdavSaved] = useState(false);
   const [s3Saved, setS3Saved] = useState(false);
   const [giteaSaved, setGiteaSaved] = useState(false);
+  const [githubSaved, setGitHubSaved] = useState(false);
   const [webdav, setWebdav] = useState({
     baseUrl: '',
     fileName: 'hsync.json',
@@ -59,6 +61,14 @@ function App() {
   });
   const [gitea, setGitea] = useState({
     baseUrl: 'https://gitea.com',
+    token: '',
+    owner: '',
+    repo: '',
+    branch: 'main',
+    filePath: 'hsync.json',
+  });
+  const [github, setGitHub] = useState({
+    apiUrl: 'https://api.github.com',
     token: '',
     owner: '',
     repo: '',
@@ -88,6 +98,15 @@ function App() {
   useEffect(() => {
     void sendRequest({ type: 'baseline:get' }).then((response) => {
       if (response.ok && 'inventory' in response) setBaseline(response.inventory);
+    });
+  }, []);
+
+  useEffect(() => {
+    void sendRequest({ type: 'github:get-config' }).then((response) => {
+      if (response.ok && 'githubConfig' in response && response.githubConfig) {
+        setGitHub((current) => ({ ...current, ...response.githubConfig }));
+        setGitHubSaved(true);
+      }
     });
   }, []);
 
@@ -264,6 +283,48 @@ function App() {
     }
   };
 
+  const testAndSaveGitHub = async () => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('github-test');
+    try {
+      const normalized = normalizeGitHubConfig(github);
+      const granted = await browser.permissions.request({
+        origins: [gitHubOriginPattern(normalized.apiUrl)],
+      });
+      if (!granted) throw new Error('GitHub API access was not granted.');
+      const response = await sendRequest({ type: 'github:test-and-save', config: normalized });
+      if (!response.ok) throw new Error(response.error);
+      setGitHub(normalized);
+      setGitHubSaved(true);
+      setNotice('Git repository connection verified and saved locally.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const runGitHubAction = async (action: 'pull' | 'upload') => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy(`github-${action}`);
+    try {
+      const response = await sendRequest({ type: `github:${action}` });
+      if (!response.ok) throw new Error(response.error);
+      if (action === 'pull' && 'inventory' in response) setBaseline(response.inventory);
+      setNotice(
+        action === 'pull'
+          ? 'Git inventory pulled into Compare.'
+          : 'Local inventory committed with conflict protection.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
   const runGiteaAction = async (action: 'pull' | 'upload') => {
     setError(null);
     setNotice(null);
@@ -395,6 +456,100 @@ function App() {
         </section>
 
         <section className="connection-card" id="connections">
+          <div className="section-heading">
+            <div>
+              <h2>Git repository connection</h2>
+              <p>Commit through GitHub or a GitHub Enterprise-compatible Contents API.</p>
+            </div>
+            <span className={`connection-status ${githubSaved ? 'connected' : ''}`}>
+              {githubSaved ? 'Configured' : 'Not configured'}
+            </span>
+          </div>
+          <div className="connection-content">
+            <label className="wide-field">
+              <span>API URL</span>
+              <input
+                type="url"
+                placeholder="https://api.github.com"
+                value={github.apiUrl}
+                onChange={(event) => {
+                  setGitHubSaved(false);
+                  setGitHub((current) => ({ ...current, apiUrl: event.target.value }));
+                }}
+              />
+              <small>For GitHub Enterprise, use its REST API base URL.</small>
+            </label>
+            <label>
+              <span>Owner</span>
+              <input
+                value={github.owner}
+                onChange={(event) => {
+                  setGitHubSaved(false);
+                  setGitHub((current) => ({ ...current, owner: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Repository</span>
+              <input
+                value={github.repo}
+                onChange={(event) => {
+                  setGitHubSaved(false);
+                  setGitHub((current) => ({ ...current, repo: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>Branch</span>
+              <input
+                value={github.branch}
+                onChange={(event) => {
+                  setGitHubSaved(false);
+                  setGitHub((current) => ({ ...current, branch: event.target.value }));
+                }}
+              />
+            </label>
+            <label>
+              <span>File path</span>
+              <input
+                value={github.filePath}
+                onChange={(event) => {
+                  setGitHubSaved(false);
+                  setGitHub((current) => ({ ...current, filePath: event.target.value }));
+                }}
+              />
+            </label>
+            <label className="wide-field">
+              <span>Access token</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder={githubSaved ? 'Enter again only to change or retest' : ''}
+                value={github.token}
+                onChange={(event) => {
+                  setGitHubSaved(false);
+                  setGitHub((current) => ({ ...current, token: event.target.value }));
+                }}
+              />
+              <small>Use a fine-grained token with Contents read/write access to this repository.</small>
+            </label>
+          </div>
+          <div className="connection-footer">
+            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveGitHub()}>
+              {remoteBusy === 'github-test' ? 'Testing…' : 'Test & save'}
+            </button>
+            <div>
+              <button className="secondary-button" disabled={!githubSaved || remoteBusy !== null} onClick={() => void runGitHubAction('pull')}>
+                {remoteBusy === 'github-pull' ? 'Pulling…' : 'Pull'}
+              </button>
+              <button disabled={!githubSaved || !inventory || remoteBusy !== null} onClick={() => void runGitHubAction('upload')}>
+                {remoteBusy === 'github-upload' ? 'Committing…' : 'Commit local'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="connection-card" id="gitea-connection">
           <div className="section-heading">
             <div>
               <h2>Gitea connection</h2>

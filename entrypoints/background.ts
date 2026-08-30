@@ -26,6 +26,12 @@ import {
   uploadGiteaInventory,
 } from '../src/browser/gitea-service';
 import { loadGiteaConfig } from '../src/browser/gitea-store';
+import {
+  configureAndTestGitHub,
+  pullGitHubInventory,
+  uploadGitHubInventory,
+} from '../src/browser/github-service';
+import { loadGitHubConfig } from '../src/browser/github-store';
 
 async function captureAndSave() {
   const inventory = await captureInventory({
@@ -211,6 +217,49 @@ export default defineBackground(() => {
       }
       if (request.type === 'gitea:upload') {
         return uploadGiteaInventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'github:get-config') {
+        return loadGitHubConfig()
+          .then((config) => ({
+            ok: true as const,
+            githubConfig: config
+              ? {
+                  apiUrl: config.apiUrl,
+                  owner: config.owner,
+                  repo: config.repo,
+                  branch: config.branch,
+                  filePath: config.filePath,
+                }
+              : null,
+          }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'github:test-and-save') {
+        return configureAndTestGitHub(request.config)
+          .then(() => ({ ok: true as const }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'github:pull') {
+        return pullGitHubInventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'github:upload') {
+        return uploadGitHubInventory()
           .then((inventory) => ({ ok: true as const, inventory }))
           .catch((error: unknown) => ({
             ok: false as const,
