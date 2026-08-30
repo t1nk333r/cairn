@@ -25,14 +25,16 @@ Milestone 1 is underway. The repository currently includes:
   version negotiation, capability reporting, and browser-specific manifests;
 - a user-triggered companion detector with optional Native Messaging permission,
   correlated handshakes, and validated host identity/capabilities;
+- public arbitrary-Git HTTPS transport in `hsyncd`, with safe branch/path
+  validation, revision checks, private checkouts, commits, and guarded pushes;
 - runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
   detection;
 - deterministic serialization and inventory-diff primitives;
 - unit tests for capture, filtering, ordering, comparison, import safety, and
   WebDAV behavior.
 
-Arbitrary-Git transport inside the optional companion, encryption, automatic
-cross-device merge, and guided restore are the next slices. Browser-only
+Authenticated Git HTTPS/SSH transport, encryption, automatic cross-device
+merge, and guided restore are the next slices. Browser-only
 repository, WebDAV, and S3 backends currently expose explicit Pull and Upload
 operations;
 automatic merge is not presented as complete yet.

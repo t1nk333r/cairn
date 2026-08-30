@@ -3,6 +3,28 @@
   "$id": "https://hsync.dev/schemas/native-protocol-v1.json",
   "title": "hsync native messaging protocol v1",
   "$defs": {
+    "gitConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["remoteUrl", "branch", "filePath"],
+      "properties": {
+        "remoteUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "branch": { "type": "string", "minLength": 1 },
+        "filePath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "gitWriteInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["remoteUrl", "branch", "filePath", "dataBase64", "expectedVersion"],
+      "properties": {
+        "remoteUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "branch": { "type": "string", "minLength": 1 },
+        "filePath": { "type": "string", "minLength": 1 },
+        "dataBase64": { "type": "string", "contentEncoding": "base64" },
+        "expectedVersion": { "type": ["string", "null"] }
+      }
+    },
     "request": {
       "type": "object",
       "additionalProperties": false,
