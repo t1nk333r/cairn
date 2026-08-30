@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   createHelloRequest,
+  createNativeRequest,
   NATIVE_HOST_NAME,
   parseHelloResponse,
+  parseNativeResult,
 } from '../src/native/protocol';
 
 describe('native companion protocol', () => {
@@ -12,6 +14,27 @@ describe('native companion protocol', () => {
       requestId: 'req-1',
       command: 'hello',
     });
+  });
+
+  it('creates a typed Git command request', () => {
+    expect(createNativeRequest('readInventory', {
+      remoteUrl: 'https://git.example.test/repo.git',
+      branch: 'main',
+      filePath: 'hsync.json',
+    }, 'req-git')).toMatchObject({
+      protocolVersion: 1,
+      requestId: 'req-git',
+      command: 'readInventory',
+    });
+  });
+
+  it('accepts a completed Git result', () => {
+    expect(parseNativeResult({
+      protocolVersion: 1,
+      requestId: 'req-git',
+      event: 'completed',
+      result: { version: 'revision-1' },
+    }, 'req-git')).toEqual({ version: 'revision-1' });
   });
 
   it('accepts a valid hello response', () => {

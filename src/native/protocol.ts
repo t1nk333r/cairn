@@ -8,6 +8,21 @@ export interface NativeHello {
   capabilities: string[];
 }
 
+export interface NativeGitConfig {
+  remoteUrl: string;
+  branch: string;
+  filePath: string;
+}
+
+export interface NativeGitReadResult {
+  dataBase64: string;
+  version: string;
+}
+
+export interface NativeGitWriteResult {
+  version: string;
+}
+
 interface NativeResponse {
   protocolVersion: number;
   requestId?: string;
@@ -32,7 +47,15 @@ export function createHelloRequest(requestId: string = crypto.randomUUID()) {
   };
 }
 
-export function parseHelloResponse(value: unknown, expectedRequestId: string): NativeHello {
+export function createNativeRequest(
+  command: 'testConnection' | 'readInventory' | 'writeInventory',
+  payload: object,
+  requestId: string = crypto.randomUUID(),
+) {
+  return { protocolVersion: NATIVE_PROTOCOL_VERSION, requestId, command, payload };
+}
+
+export function parseNativeResult(value: unknown, expectedRequestId: string): unknown {
   if (!isObject(value)) throw new Error('The native companion returned an invalid response.');
   const response = value as unknown as NativeResponse;
   if (response.protocolVersion !== NATIVE_PROTOCOL_VERSION) {
@@ -45,10 +68,18 @@ export function parseHelloResponse(value: unknown, expectedRequestId: string): N
     const message = response.error?.message;
     throw new Error(typeof message === 'string' ? message : 'The native companion rejected the request.');
   }
-  if (response.event !== 'completed' || !isObject(response.result)) {
+  if (response.event !== 'completed') {
+    throw new Error('The native companion returned an incomplete response.');
+  }
+  return response.result;
+}
+
+export function parseHelloResponse(value: unknown, expectedRequestId: string): NativeHello {
+  const result = parseNativeResult(value, expectedRequestId);
+  if (!isObject(result)) {
     throw new Error('The native companion returned an incomplete handshake.');
   }
-  const { hostName, hostVersion, protocolVersions, capabilities } = response.result;
+  const { hostName, hostVersion, protocolVersions, capabilities } = result;
   if (
     hostName !== NATIVE_HOST_NAME ||
     typeof hostVersion !== 'string' ||

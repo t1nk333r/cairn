@@ -32,7 +32,13 @@ import {
   uploadGitHubInventory,
 } from '../src/browser/github-service';
 import { loadGitHubConfig } from '../src/browser/github-store';
-import { detectNativeCompanion } from '../src/browser/native-service';
+import {
+  configureAndTestNativeGit,
+  detectNativeCompanion,
+  pullNativeGitInventory,
+  uploadNativeGitInventory,
+} from '../src/browser/native-service';
+import { loadNativeGitConfig } from '../src/browser/native-git-store';
 
 async function captureAndSave() {
   const inventory = await captureInventory({
@@ -270,6 +276,38 @@ export default defineBackground(() => {
       if (request.type === 'native:detect') {
         return detectNativeCompanion()
           .then((nativeCompanion) => ({ ok: true as const, nativeCompanion }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'native-git:get-config') {
+        return loadNativeGitConfig()
+          .then((nativeGitConfig) => ({ ok: true as const, nativeGitConfig }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'native-git:test-and-save') {
+        return configureAndTestNativeGit(request.config)
+          .then(() => ({ ok: true as const }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'native-git:pull') {
+        return pullNativeGitInventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'native-git:upload') {
+        return uploadNativeGitInventory()
+          .then((inventory) => ({ ok: true as const, inventory }))
           .catch((error: unknown) => ({
             ok: false as const,
             error: error instanceof Error ? error.message : String(error),

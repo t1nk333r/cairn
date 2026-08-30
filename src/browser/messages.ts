@@ -3,7 +3,7 @@ import type { StoredWebDavConfig } from './webdav-store';
 import type { StoredS3Config } from './s3-store';
 import type { StoredGiteaConfig } from './gitea-store';
 import type { StoredGitHubConfig } from './github-store';
-import type { NativeHello } from '../native/protocol';
+import type { NativeGitConfig, NativeHello } from '../native/protocol';
 
 export type HsyncRequest =
   | { type: 'inventory:capture' }
@@ -43,6 +43,10 @@ export type HsyncRequest =
   | { type: 'github:pull' }
   | { type: 'github:upload' }
   | { type: 'native:detect' }
+  | { type: 'native-git:get-config' }
+  | { type: 'native-git:test-and-save'; config: NativeGitConfig }
+  | { type: 'native-git:pull' }
+  | { type: 'native-git:upload' }
   | { type: 'options:open' };
 
 export type HsyncResponse =
@@ -52,5 +56,6 @@ export type HsyncResponse =
   | { ok: true; giteaConfig: StoredGiteaConfig | null }
   | { ok: true; githubConfig: StoredGitHubConfig | null }
   | { ok: true; nativeCompanion: NativeHello }
+  | { ok: true; nativeGitConfig: NativeGitConfig | null }
   | { ok: true }
   | { ok: false; error: string };

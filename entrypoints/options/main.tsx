@@ -45,6 +45,7 @@ function App() {
   const [giteaSaved, setGiteaSaved] = useState(false);
   const [githubSaved, setGitHubSaved] = useState(false);
   const [nativeCompanion, setNativeCompanion] = useState<NativeHello | null>(null);
+  const [nativeGitSaved, setNativeGitSaved] = useState(false);
   const [webdav, setWebdav] = useState({
     baseUrl: '',
     fileName: 'hsync.json',
@@ -77,6 +78,11 @@ function App() {
     branch: 'main',
     filePath: 'hsync.json',
   });
+  const [nativeGit, setNativeGit] = useState({
+    remoteUrl: '',
+    branch: 'main',
+    filePath: 'hsync.json',
+  });
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (capture = false) => {
@@ -101,6 +107,25 @@ function App() {
     void sendRequest({ type: 'baseline:get' }).then((response) => {
       if (response.ok && 'inventory' in response) setBaseline(response.inventory);
     });
+  }, []);
+
+  useEffect(() => {
+    void sendRequest({ type: 'native-git:get-config' }).then((response) => {
+      if (response.ok && 'nativeGitConfig' in response && response.nativeGitConfig) {
+        setNativeGit(response.nativeGitConfig);
+        setNativeGitSaved(true);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      if (!(await browser.permissions.contains({ permissions: ['nativeMessaging'] }))) return;
+      const response = await sendRequest({ type: 'native:detect' });
+      if (response.ok && 'nativeCompanion' in response) {
+        setNativeCompanion(response.nativeCompanion);
+      }
+    })().catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -369,6 +394,42 @@ function App() {
     }
   };
 
+  const testAndSaveNativeGit = async () => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('native-git-test');
+    try {
+      const response = await sendRequest({ type: 'native-git:test-and-save', config: nativeGit });
+      if (!response.ok) throw new Error(response.error);
+      setNativeGitSaved(true);
+      setNotice('Native Git connection verified and saved locally.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const runNativeGitAction = async (action: 'pull' | 'upload') => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy(`native-git-${action}`);
+    try {
+      const response = await sendRequest({ type: `native-git:${action}` });
+      if (!response.ok) throw new Error(response.error);
+      if (action === 'pull' && 'inventory' in response) setBaseline(response.inventory);
+      setNotice(
+        action === 'pull'
+          ? 'Native Git inventory pulled into Compare.'
+          : 'Local inventory committed and pushed with revision protection.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
   const clearBaseline = async () => {
     const response = await sendRequest({ type: 'baseline:clear' });
     if (!response.ok) {
@@ -491,9 +552,8 @@ function App() {
           </div>
           <div className="connection-content">
             <p className="cors-note wide-field">
-              hsyncd is optional. The current companion build supports secure protocol
-              negotiation only; Git transport controls stay hidden until the installed
-              companion advertises them.
+              hsyncd is optional. Git controls appear only when the installed companion
+              advertises the matching transport commands.
             </p>
             {nativeCompanion && (
               <p className="cors-note wide-field">
@@ -501,11 +561,61 @@ function App() {
                 {nativeCompanion.protocolVersions.join(', ')}
               </p>
             )}
+            {nativeCompanion?.capabilities.includes('testConnection') && (
+              <>
+                <label className="wide-field">
+                  <span>HTTPS Git remote</span>
+                  <input
+                    type="url"
+                    placeholder="https://git.example.com/owner/repository.git"
+                    value={nativeGit.remoteUrl}
+                    onChange={(event) => {
+                      setNativeGitSaved(false);
+                      setNativeGit((current) => ({ ...current, remoteUrl: event.target.value }));
+                    }}
+                  />
+                  <small>Public HTTPS only in this build. Credential-bearing URLs are rejected.</small>
+                </label>
+                <label>
+                  <span>Branch</span>
+                  <input
+                    value={nativeGit.branch}
+                    onChange={(event) => {
+                      setNativeGitSaved(false);
+                      setNativeGit((current) => ({ ...current, branch: event.target.value }));
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>File path</span>
+                  <input
+                    value={nativeGit.filePath}
+                    onChange={(event) => {
+                      setNativeGitSaved(false);
+                      setNativeGit((current) => ({ ...current, filePath: event.target.value }));
+                    }}
+                  />
+                </label>
+              </>
+            )}
           </div>
           <div className="connection-footer">
             <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void detectCompanion()}>
               {remoteBusy === 'native-detect' ? 'Checking…' : 'Detect companion'}
             </button>
+            {nativeCompanion?.capabilities.includes('testConnection') && (
+              <div>
+                <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveNativeGit()}>
+                  {remoteBusy === 'native-git-test' ? 'Testing…' : 'Test & save'}
+                </button>
+                <button className="secondary-button" disabled={!nativeGitSaved || remoteBusy !== null || !nativeCompanion.capabilities.includes('readInventory')} onClick={() => void runNativeGitAction('pull')}>
+                  {remoteBusy === 'native-git-pull' ? 'Pulling…' : 'Pull'}
+                </button>
+                <button disabled={!nativeGitSaved || !inventory || remoteBusy !== null || !nativeCompanion.capabilities.includes('writeInventory')} onClick={() => void runNativeGitAction('upload')}>
+                  {remoteBusy === 'native-git-upload' ? 'Committing…' : 'Commit local'}
+                </button>
+              </div>
+            )}
           </div>
         </section>
 

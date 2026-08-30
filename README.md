@@ -27,6 +27,8 @@ Milestone 1 is underway. The repository currently includes:
   correlated handshakes, and validated host identity/capabilities;
 - public arbitrary-Git HTTPS transport in `hsyncd`, with safe branch/path
   validation, revision checks, private checkouts, commits, and guarded pushes;
+- capability-gated native Git settings, connection testing, Pull, and Commit
+  controls in the Chromium/Helium and Firefox control center;
 - runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
   detection;
 - deterministic serialization and inventory-diff primitives;

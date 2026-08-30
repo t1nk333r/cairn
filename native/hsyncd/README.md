@@ -15,6 +15,9 @@ URLs are rejected, and the companion does not advertise sync or secret commands.
 The extension requests its optional Native Messaging permission only when the
 user selects **Detect companion**, then validates the correlated hello response
 and displays the companion version and advertised capabilities.
+When Git transport capabilities are present, the control center exposes the
+remote URL, branch, and inventory path plus connection, Pull, and Commit actions.
+It retains the last-read revision locally and supplies it on the next write.
 
 ## Development
 
