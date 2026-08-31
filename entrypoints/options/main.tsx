@@ -12,7 +12,6 @@ import { normalizeS3Config, s3OriginPattern } from '../../src/backends/s3';
 import { giteaOriginPattern, normalizeGiteaConfig } from '../../src/backends/gitea';
 import { gitHubOriginPattern, normalizeGitHubConfig } from '../../src/backends/github';
 import type { StoredWebDavConfig } from '../../src/browser/webdav-store';
-import type { NativeHello } from '../../src/native/protocol';
 import './style.css';
 
 async function sendRequest(request: HsyncRequest) {
@@ -44,9 +43,6 @@ function App() {
   const [s3Saved, setS3Saved] = useState(false);
   const [giteaSaved, setGiteaSaved] = useState(false);
   const [githubSaved, setGitHubSaved] = useState(false);
-  const [nativeCompanion, setNativeCompanion] = useState<NativeHello | null>(null);
-  const [nativeGitSaved, setNativeGitSaved] = useState(false);
-  const [nativeGitCredentialStored, setNativeGitCredentialStored] = useState(false);
   const [webdav, setWebdav] = useState({
     baseUrl: '',
     fileName: 'hsync.json',
@@ -79,15 +75,6 @@ function App() {
     branch: 'main',
     filePath: 'hsync.json',
   });
-  const [nativeGit, setNativeGit] = useState({
-    remoteUrl: '',
-    branch: 'main',
-    filePath: 'hsync.json',
-  });
-  const [nativeGitCredential, setNativeGitCredential] = useState({
-    username: '',
-    token: '',
-  });
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (capture = false) => {
@@ -112,28 +99,6 @@ function App() {
     void sendRequest({ type: 'baseline:get' }).then((response) => {
       if (response.ok && 'inventory' in response) setBaseline(response.inventory);
     });
-  }, []);
-
-  useEffect(() => {
-    void sendRequest({ type: 'native-git:get-config' }).then((response) => {
-      if (response.ok && 'nativeGitConfig' in response && response.nativeGitConfig) {
-        setNativeGit(response.nativeGitConfig);
-        setNativeGitSaved(true);
-      }
-      if (response.ok && 'nativeGitCredentialStored' in response) {
-        setNativeGitCredentialStored(response.nativeGitCredentialStored);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    void (async () => {
-      if (!(await browser.permissions.contains({ permissions: ['nativeMessaging'] }))) return;
-      const response = await sendRequest({ type: 'native:detect' });
-      if (response.ok && 'nativeCompanion' in response) {
-        setNativeCompanion(response.nativeCompanion);
-      }
-    })().catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -380,105 +345,6 @@ function App() {
     }
   };
 
-  const detectCompanion = async () => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('native-detect');
-    try {
-      const granted = await browser.permissions.request({
-        permissions: ['nativeMessaging'],
-      });
-      if (!granted) throw new Error('Native companion access was not granted.');
-      const response = await sendRequest({ type: 'native:detect' });
-      if (!response.ok) throw new Error(response.error);
-      if (!('nativeCompanion' in response)) throw new Error('The companion handshake was incomplete.');
-      setNativeCompanion(response.nativeCompanion);
-      setNotice(`hsyncd ${response.nativeCompanion.hostVersion} is connected.`);
-    } catch (cause) {
-      setNativeCompanion(null);
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const testAndSaveNativeGit = async () => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('native-git-test');
-    try {
-      const response = await sendRequest({ type: 'native-git:test-and-save', config: nativeGit });
-      if (!response.ok) throw new Error(response.error);
-      setNativeGitSaved(true);
-      setNotice('Native Git connection verified and saved locally.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const runNativeGitAction = async (action: 'pull' | 'upload') => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy(`native-git-${action}`);
-    try {
-      const response = await sendRequest({ type: `native-git:${action}` });
-      if (!response.ok) throw new Error(response.error);
-      if (action === 'pull' && 'inventory' in response) setBaseline(response.inventory);
-      setNotice(
-        action === 'pull'
-          ? 'Native Git inventory pulled into Compare.'
-          : 'Local inventory committed and pushed with revision protection.',
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const storeNativeGitCredential = async () => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('native-git-credential');
-    try {
-      const response = await sendRequest({
-        type: 'native-git:set-credential',
-        remoteUrl: nativeGit.remoteUrl,
-        username: nativeGitCredential.username,
-        token: nativeGitCredential.token,
-      });
-      if (!response.ok) throw new Error(response.error);
-      setNativeGitCredential((current) => ({ ...current, token: '' }));
-      setNativeGitCredentialStored(true);
-      setNotice('Git token saved in the operating-system keyring.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const removeNativeGitCredential = async () => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('native-git-credential-delete');
-    try {
-      const response = await sendRequest({
-        type: 'native-git:delete-credential',
-        remoteUrl: nativeGit.remoteUrl,
-      });
-      if (!response.ok) throw new Error(response.error);
-      setNativeGitCredentialStored(false);
-      setNotice('Git token removed from the operating-system keyring.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
   const clearBaseline = async () => {
     const response = await sendRequest({ type: 'baseline:clear' });
     if (!response.ok) {
@@ -590,120 +456,6 @@ function App() {
         </section>
 
         <section className="connection-card" id="connections">
-          <div className="section-heading">
-            <div>
-              <h2>Native Git companion</h2>
-              <p>Optional support for arbitrary Git HTTPS and SSH remotes.</p>
-            </div>
-            <span className={`connection-status ${nativeCompanion ? 'connected' : ''}`}>
-              {nativeCompanion ? `Connected · ${nativeCompanion.hostVersion}` : 'Not detected'}
-            </span>
-          </div>
-          <div className="connection-content">
-            <p className="cors-note wide-field">
-              hsyncd is optional. Git controls appear only when the installed companion
-              advertises the matching transport commands.
-            </p>
-            {nativeCompanion && (
-              <p className="cors-note wide-field">
-                Capabilities: {nativeCompanion.capabilities.join(', ') || 'none'} · Protocols:{' '}
-                {nativeCompanion.protocolVersions.join(', ')}
-              </p>
-            )}
-            {nativeCompanion?.capabilities.includes('testConnection') && (
-              <>
-                <label className="wide-field">
-                  <span>HTTPS Git remote</span>
-                  <input
-                    type="url"
-                    placeholder="https://git.example.com/owner/repository.git"
-                    value={nativeGit.remoteUrl}
-                    onChange={(event) => {
-                      setNativeGitSaved(false);
-                      setNativeGitCredentialStored(false);
-                      setNativeGit((current) => ({ ...current, remoteUrl: event.target.value }));
-                    }}
-                  />
-                  <small>Credentials are stored by origin in the OS keyring. Credential-bearing URLs are rejected.</small>
-                </label>
-                <label>
-                  <span>Branch</span>
-                  <input
-                    value={nativeGit.branch}
-                    onChange={(event) => {
-                      setNativeGitSaved(false);
-                      setNativeGit((current) => ({ ...current, branch: event.target.value }));
-                    }}
-                  />
-                </label>
-                <label>
-                  <span>File path</span>
-                  <input
-                    value={nativeGit.filePath}
-                    onChange={(event) => {
-                      setNativeGitSaved(false);
-                      setNativeGit((current) => ({ ...current, filePath: event.target.value }));
-                    }}
-                  />
-                </label>
-                {nativeCompanion.capabilities.includes('setSecret') && (
-                  <>
-                    <label>
-                      <span>Git username</span>
-                      <input
-                        autoComplete="username"
-                        placeholder="git account username"
-                        value={nativeGitCredential.username}
-                        onChange={(event) => setNativeGitCredential((current) => ({ ...current, username: event.target.value }))}
-                      />
-                    </label>
-                    <label>
-                      <span>Access token</span>
-                      <input
-                        type="password"
-                        autoComplete="current-password"
-                        placeholder={nativeGitCredentialStored ? 'Stored in OS keyring' : ''}
-                        value={nativeGitCredential.token}
-                        onChange={(event) => setNativeGitCredential((current) => ({ ...current, token: event.target.value }))}
-                      />
-                      <small>The token is sent directly to hsyncd and never saved by the extension.</small>
-                    </label>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-          <div className="connection-footer">
-            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void detectCompanion()}>
-              {remoteBusy === 'native-detect' ? 'Checking…' : 'Detect companion'}
-            </button>
-            {nativeCompanion?.capabilities.includes('testConnection') && (
-              <div>
-                <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveNativeGit()}>
-                  {remoteBusy === 'native-git-test' ? 'Testing…' : 'Test & save'}
-                </button>
-                {nativeCompanion.capabilities.includes('setSecret') && (
-                  <button className="secondary-button" disabled={remoteBusy !== null || !nativeGit.remoteUrl || !nativeGitCredential.username || !nativeGitCredential.token} onClick={() => void storeNativeGitCredential()}>
-                    {remoteBusy === 'native-git-credential' ? 'Saving…' : 'Save token'}
-                  </button>
-                )}
-                {nativeGitCredentialStored && nativeCompanion.capabilities.includes('deleteSecret') && (
-                  <button className="text-button" disabled={remoteBusy !== null} onClick={() => void removeNativeGitCredential()}>
-                    {remoteBusy === 'native-git-credential-delete' ? 'Removing…' : 'Remove token'}
-                  </button>
-                )}
-                <button className="secondary-button" disabled={!nativeGitSaved || remoteBusy !== null || !nativeCompanion.capabilities.includes('readInventory')} onClick={() => void runNativeGitAction('pull')}>
-                  {remoteBusy === 'native-git-pull' ? 'Pulling…' : 'Pull'}
-                </button>
-                <button disabled={!nativeGitSaved || !inventory || remoteBusy !== null || !nativeCompanion.capabilities.includes('writeInventory')} onClick={() => void runNativeGitAction('upload')}>
-                  {remoteBusy === 'native-git-upload' ? 'Committing…' : 'Commit local'}
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="connection-card" id="github-connection">
           <div className="section-heading">
             <div>
               <h2>Git repository connection</h2>

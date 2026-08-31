@@ -32,18 +32,6 @@ import {
   uploadGitHubInventory,
 } from '../src/browser/github-service';
 import { loadGitHubConfig } from '../src/browser/github-store';
-import {
-  configureAndTestNativeGit,
-  detectNativeCompanion,
-  pullNativeGitInventory,
-  saveNativeGitCredential,
-  deleteNativeGitCredential,
-  uploadNativeGitInventory,
-} from '../src/browser/native-service';
-import {
-  loadNativeGitConfig,
-  loadNativeGitCredentialMarker,
-} from '../src/browser/native-git-store';
 
 async function captureAndSave() {
   const inventory = await captureInventory({
@@ -273,66 +261,6 @@ export default defineBackground(() => {
       if (request.type === 'github:upload') {
         return uploadGitHubInventory()
           .then((inventory) => ({ ok: true as const, inventory }))
-          .catch((error: unknown) => ({
-            ok: false as const,
-            error: error instanceof Error ? error.message : String(error),
-          }));
-      }
-      if (request.type === 'native:detect') {
-        return detectNativeCompanion()
-          .then((nativeCompanion) => ({ ok: true as const, nativeCompanion }))
-          .catch((error: unknown) => ({
-            ok: false as const,
-            error: error instanceof Error ? error.message : String(error),
-          }));
-      }
-      if (request.type === 'native-git:get-config') {
-        return Promise.all([loadNativeGitConfig(), loadNativeGitCredentialMarker()])
-          .then(([nativeGitConfig, nativeGitCredentialStored]) => ({
-            ok: true as const,
-            nativeGitConfig,
-            nativeGitCredentialStored,
-          }))
-          .catch((error: unknown) => ({
-            ok: false as const,
-            error: error instanceof Error ? error.message : String(error),
-          }));
-      }
-      if (request.type === 'native-git:test-and-save') {
-        return configureAndTestNativeGit(request.config)
-          .then(() => ({ ok: true as const }))
-          .catch((error: unknown) => ({
-            ok: false as const,
-            error: error instanceof Error ? error.message : String(error),
-          }));
-      }
-      if (request.type === 'native-git:pull') {
-        return pullNativeGitInventory()
-          .then((inventory) => ({ ok: true as const, inventory }))
-          .catch((error: unknown) => ({
-            ok: false as const,
-            error: error instanceof Error ? error.message : String(error),
-          }));
-      }
-      if (request.type === 'native-git:upload') {
-        return uploadNativeGitInventory()
-          .then((inventory) => ({ ok: true as const, inventory }))
-          .catch((error: unknown) => ({
-            ok: false as const,
-            error: error instanceof Error ? error.message : String(error),
-          }));
-      }
-      if (request.type === 'native-git:set-credential') {
-        return saveNativeGitCredential(request.remoteUrl, request.username, request.token)
-          .then(() => ({ ok: true as const }))
-          .catch((error: unknown) => ({
-            ok: false as const,
-            error: error instanceof Error ? error.message : String(error),
-          }));
-      }
-      if (request.type === 'native-git:delete-credential') {
-        return deleteNativeGitCredential(request.remoteUrl)
-          .then(() => ({ ok: true as const }))
           .catch((error: unknown) => ({
             ok: false as const,
             error: error instanceof Error ? error.message : String(error),
