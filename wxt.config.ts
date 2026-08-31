@@ -9,6 +9,9 @@ export default defineConfig({
     description: 'Sync your browser extension inventory using storage you control.',
     version: '0.1.0',
     permissions: ['management', 'storage', 'alarms'],
+    action: {
+      default_title: 'hsync',
+    },
     optional_host_permissions: [
       'https://*/*',
       'http://localhost/*',
