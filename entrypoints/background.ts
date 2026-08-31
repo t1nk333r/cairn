@@ -42,15 +42,32 @@ async function captureAndSave() {
   return inventory;
 }
 
+const CAPTURE_DEBOUNCE_MS = 750;
+
+let captureTimer: ReturnType<typeof setTimeout> | null = null;
+let captureInFlight: Promise<unknown> = Promise.resolve();
+
+function scheduleCapture() {
+  if (captureTimer !== null) clearTimeout(captureTimer);
+  captureTimer = setTimeout(() => {
+    captureTimer = null;
+    captureInFlight = captureInFlight
+      .then(() => captureAndSave())
+      .catch((error: unknown) => {
+        console.error('hsync: inventory capture failed', error);
+      });
+  }, CAPTURE_DEBOUNCE_MS);
+}
+
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => {
     void captureAndSave();
   });
 
-  browser.management.onInstalled.addListener(() => void captureAndSave());
-  browser.management.onUninstalled.addListener(() => void captureAndSave());
-  browser.management.onEnabled.addListener(() => void captureAndSave());
-  browser.management.onDisabled.addListener(() => void captureAndSave());
+  browser.management.onInstalled.addListener(() => scheduleCapture());
+  browser.management.onUninstalled.addListener(() => scheduleCapture());
+  browser.management.onEnabled.addListener(() => scheduleCapture());
+  browser.management.onDisabled.addListener(() => scheduleCapture());
 
   browser.runtime.onMessage.addListener(
     (request: HsyncRequest): Promise<HsyncResponse> | undefined => {
