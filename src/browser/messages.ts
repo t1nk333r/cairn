@@ -40,8 +40,7 @@ export type HsyncRequest =
     }
   | { type: 'github:get-config' }
   | { type: 'github:pull' }
-  | { type: 'github:upload' }
-  | { type: 'options:open' };
+  | { type: 'github:upload' };
 
 export type HsyncResponse =
   | { ok: true; inventory: InventoryDocument | null }
