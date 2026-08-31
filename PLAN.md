@@ -46,8 +46,6 @@ packages/
   backend-gitea/             Gitea repository contents API
   backend-webdav/            GET/PUT with ETag preconditions
   backend-s3/                SigV4 GET/PUT with ETag preconditions
-native/
-  hsyncd/                    optional Go companion for arbitrary Git/keyring
 manifests/
   chromium.json              Chromium/Helium MV3 overlay
   firefox.json               Firefox MV3 overlay
@@ -245,19 +243,20 @@ target S3-compatible service without losing concurrent changes.
 - Implement and test the explicit Gitea adapter.
 - Add commit messages, branch/path configuration, and conflict recovery.
 - Document the boundary between API-backed Git and arbitrary Git remotes.
-- Scaffold the optional Go native companion and a versioned Native Messaging
-  protocol. (Implemented: framing, negotiation, capability reporting, and
-  Chromium/Firefox manifest templates, plus extension-side detection.)
-- Add arbitrary Git clone/fetch/commit/push with SSH agent and HTTPS-token
-  authentication. (HTTPS clone/read/commit/push and optimistic revision
-  checks, extension controls, and keyring-backed HTTPS tokens are implemented;
-  SSH remains.)
-- Store companion credentials in the OS keyring and ship registration helpers
-  for Chromium-family browsers and Firefox.
+- ~~Scaffold the optional Go native companion and a versioned Native Messaging
+  protocol.~~ **Removed 2026-08-31** (built, then deleted along with arbitrary
+  Git support — see `HELIUM_SYNC_GIT_ADAPTATION.md`).
+- ~~Add arbitrary Git clone/fetch/commit/push with SSH agent and HTTPS-token
+  authentication.~~ **Removed 2026-08-31**, same reason.
+- ~~Store companion credentials in the OS keyring and ship registration helpers
+  for Chromium-family browsers and Firefox.~~ **Removed 2026-08-31**, same
+  reason.
 
 Exit condition: every inventory change is auditable as a commit and concurrent
-writes produce a reviewable merge instead of overwrite. Arbitrary Git works
-through the optional companion; all other backends continue to work without it.
+writes produce a reviewable merge instead of overwrite. hsync now supports
+Git only through repository-host APIs (Gitea, GitHub); arbitrary Git remotes
+and the native companion that would have carried them are not part of the
+product — see `HELIUM_SYNC_GIT_ADAPTATION.md`.
 
 ### Milestone 4: guided restore and release hardening
 

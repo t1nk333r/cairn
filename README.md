@@ -21,24 +21,14 @@ Milestone 1 is underway. The repository currently includes:
   Pull, and SHA-protected commits;
 - a GitHub and GitHub Enterprise repository backend using ordinary commits and
   blob-SHA conflict protection;
-- an optional Go companion scaffold with bounded Native Messaging framing,
-  version negotiation, capability reporting, and browser-specific manifests;
-- a user-triggered companion detector with optional Native Messaging permission,
-  correlated handshakes, and validated host identity/capabilities;
-- public arbitrary-Git HTTPS transport in `hsyncd`, with safe branch/path
-  validation, revision checks, private checkouts, commits, and guarded pushes;
-- capability-gated native Git settings, connection testing, Pull, and Commit
-  controls in the Chromium/Helium and Firefox control center;
-- origin-scoped Git HTTPS tokens stored in the operating-system keyring, with
-  non-echoing secret commands and redirect-resistant authorization;
 - runtime endpoint permission requests, HTTPS enforcement, and ETag conflict
   detection;
 - deterministic serialization and inventory-diff primitives;
 - unit tests for capture, filtering, ordering, comparison, import safety, and
   WebDAV behavior.
 
-Git SSH transport, encryption, automatic cross-device merge, and guided restore
-are the next slices. Browser-only
+Encryption, automatic cross-device merge, and guided restore are the next
+slices. Browser-only
 repository, WebDAV, and S3 backends currently expose explicit Pull and Upload
 operations;
 automatic merge is not presented as complete yet.
@@ -62,11 +52,10 @@ The product structure intentionally adapts proven ideas from the MIT-licensed
 [BOOKMARKORA_ADAPTATION.md](BOOKMARKORA_ADAPTATION.md) for the mapping and the
 boundaries of reuse.
 
-True arbitrary-Git support is designed around an optional native companion,
-informed by the MIT-licensed
-[helium-sync-git](https://github.com/mdeloughry/helium-sync-git). Browser-only
-backends remain available without installing that companion. See
-[HELIUM_SYNC_GIT_ADAPTATION.md](HELIUM_SYNC_GIT_ADAPTATION.md).
+An optional native companion for arbitrary-Git support, informed by the
+MIT-licensed [helium-sync-git](https://github.com/mdeloughry/helium-sync-git),
+was built and then removed on 2026-08-31 in favor of staying browser-only. See
+[HELIUM_SYNC_GIT_ADAPTATION.md](HELIUM_SYNC_GIT_ADAPTATION.md) for why.
 
 ## Development
 
@@ -75,7 +64,6 @@ Requires a current Node.js release and npm.
 ```bash
 npm install
 npm test
-npm run test:native
 npm run typecheck
 npm run build
 npm run build:firefox

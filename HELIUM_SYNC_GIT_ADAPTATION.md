@@ -1,204 +1,93 @@
-# helium-sync-git adaptation
+# helium-sync-git adaptation (reversed)
 
-## Decision
+## Status: reversed on 2026-08-31
 
-`helium-sync-git` proves the right solution for true arbitrary Git: an optional
-native process performs Git and credential operations while a browser extension
-controls it through Native Messaging.
+This document originally recorded the decision to adopt a native-companion
+boundary from `helium-sync-git`. That decision was **reversed** on
+2026-08-31, per plan 006 (`plans/006-remove-native-companion.md`), and the
+native companion (`hsyncd`) was deleted from the codebase. This file is kept,
+rewritten, so the reversal — and the reasoning behind it — is not silently
+reopened later.
 
-hsync will adopt that boundary without adopting raw Chromium-profile sync.
+## What was adopted, and why it no longer fits
 
-```text
-Chromium / Helium / Firefox extension
-        │
-        ├── direct HTTPS ── Gitea API / WebDAV / S3 / host APIs
-        │
-        └── Native Messaging (optional)
-                    │
-                 hsyncd
-                    ├── Git SSH/HTTPS
-                    ├── OS keyring
-                    └── local locks/logs
-```
+`helium-sync-git` synchronizes browser **profile files**: `Preferences`,
+`Secure Preferences`, `History`, `Bookmarks`, `Extensions`, `Extension State`,
+`Extension Cookies`, `Local Storage`, and more, scanned directly off disk while
+the profile may be locked. That is a real filesystem-synchronization problem —
+it needs atomic replacement, process locking, and checksummed three-way file
+comparison — and a native process, outside the browser sandbox, is a
+reasonable way to do that work.
 
-Users who choose WebDAV, S3, Gitea API, or a supported repository-host API do
-not install `hsyncd`. Users who require an arbitrary Git remote, SSH agent,
-1Password SSH agent, or a system keyring install it.
+hsync does not have that problem. It synchronizes exactly **one JSON
+document, under 768 KB**: the extension inventory. Every browser API needed to
+produce and consume that document (`browser.management`, `browser.storage`)
+is already available to an extension without leaving the sandbox. The native
+companion's actual justification — safe, atomic, lock-aware access to
+mutable, browser-owned files on disk — never applied to hsync's payload. The
+architecture was adopted from the reference project's *pattern*, not from a
+requirement hsync actually had.
 
-## What the reference implementation does
+## Why removal, and not just non-use
 
-The linked MIT-licensed project contains:
+The companion was optional and could have been left in place, unused by most
+users. It was removed instead of left dormant because, measured against what
+it delivered, it was the single most expensive and risk-concentrated part of
+the codebase:
 
-- a Go synchronization engine;
-- a `go-git` transport with SSH-agent, common key-file, and HTTPS-token auth;
-- AES-256-GCM with PBKDF2-derived keys;
-- operating-system keyring integration;
-- per-device identity and local locking;
-- checksum-based three-way file comparison;
-- atomic temp-file replacement for downloaded files;
-- a WXT Manifest V3 extension;
-- Chromium Native Messaging framing and progress events;
-- scheduled sync, system tray, setup scripts, and service units.
+- Roughly **1,733 lines** — about a third of the project — for a feature
+  (arbitrary SSH/HTTPS Git remotes) that only a narrow slice of users would
+  ever need, when Gitea, WebDAV, S3, and Git-host APIs already cover the
+  common self-hosted and cloud cases over plain HTTPS.
+- **Eight findings** from the 2026-08-31 audit lived in it or existed because
+  of it: `git` inheriting the full process environment, an `ssh://` hostname
+  validation gap, an orphaned OS-keyring token left behind on remote change, a
+  frame-size boundary that could terminate the host process, every failed
+  push being misreported as a conflict, a protocol-schema contradiction
+  between the TypeScript and Go sides, validation drift between them, and
+  `ExecRunner` — the code that hands credentials to `git` — having no test
+  coverage at all.
+- **The expensive remaining work was still ahead, not behind.**
+  Native-host registration, install, and uninstall support for Chromium,
+  Helium, and Firefox across the supported operating systems had not been
+  built yet, and that is the part a user would have had to get through before
+  any of this worked for them.
 
-Its browser extension is a thin remote control: it sends commands to a native
-host, displays progress, changes toolbar status, and schedules sync alarms.
+A live, exercised, but rarely-used native-messaging surface with unresolved
+security findings and an unbuilt install path is a liability, not an optional
+extra. Deleting it removed all eight findings at once and returned the
+project to something that ships entirely inside the browser sandbox.
 
-## What hsync will reuse conceptually
+## What is traded away
 
-### Native Messaging boundary
+Removing the companion gives up two things it uniquely provided, and only
+those two:
 
-Use a small, versioned protocol over the browser's length-prefixed Native
-Messaging channel. Standard output is reserved exclusively for protocol frames;
-logs go to standard error or a rotating file.
+- **Arbitrary Git remotes reachable only over SSH**, with no web forge
+  (Gitea, GitHub, etc.) in front of them — e.g. a bare repository on a
+  personal server accessed as `git@host:owner/repo.git`.
+- **SSH-agent authentication** (including a forwarded 1Password SSH agent)
+  as an alternative to a stored HTTPS token.
 
-```json
-{
-  "protocolVersion": 1,
-  "requestId": "generated-id",
-  "command": "sync",
-  "payload": { "connectionId": "git-main" }
-}
-```
+A user who currently has only a bare SSH Git repository is not left with
+nothing: they can put Gitea (or another Git-host API) in front of it, or use
+WebDAV or S3 for the same underlying storage, all of which are implemented
+in `src/backends/` today and covered by tests. That is a real but narrow loss
+of audience, and it is the deliberate trade this reversal makes.
 
-Responses are correlated and typed rather than relying on unstructured status
-strings:
+## Current model
 
-```json
-{
-  "protocolVersion": 1,
-  "requestId": "generated-id",
-  "event": "completed",
-  "result": { "version": "git-commit-sha" }
-}
-```
+hsync is now browser-only. It supports exactly the connection model that
+`BOOKMARKORA_ADAPTATION.md` describes: Git-host APIs, Gitea, WebDAV, and S3,
+all over HTTPS with tokens, all implemented under `src/backends/` and
+`src/browser/`. There is no native process, no OS keyring dependency, and no
+`nativeMessaging` permission.
 
-Supported commands in the first companion release:
+## If this is ever reconsidered
 
-- `hello` / capability negotiation;
-- `testConnection`;
-- `readInventory`;
-- `writeInventory` with expected revision;
-- `sync`;
-- `getStatus`;
-- `cancel`;
-- `setSecret` and `deleteSecret` through the OS keyring.
-
-The protocol will never accept arbitrary shell commands or arbitrary local file
-paths from the extension.
-
-### Git transport
-
-The companion owns a private working repository in its state directory. It
-supports:
-
-- `ssh://` and SCP-style `git@host:owner/repo.git` remotes;
-- HTTPS with a keyring-held token;
-- configurable branch and inventory path;
-- SSH agent, including 1Password when exposed through the normal agent socket;
-- explicit known-host verification;
-- fetch/rebase-or-merge, deterministic inventory write, commit, and push;
-- non-fast-forward detection surfaced as a sync conflict.
-
-Unlike the reference, hsync will not fall back silently from host verification
-or treat a failed checkout as permission to create a branch without validation.
-
-### Credentials
-
-The OS keyring is the preferred store for native-companion secrets. Config files
-contain only keyring references. Migration removes legacy plaintext only after
-the keyring write is verified.
-
-### Reliability
-
-Adopt the useful process lock, cancellation-aware contexts, progress streaming,
-checksum verification, and atomic file replacement. Extend them with structured
-error codes and recovery guidance suitable for the extension UI.
-
-## What hsync will not copy
-
-### Raw profile synchronization
-
-The reference scans Chromium profile paths including:
-
-- `Preferences` and `Secure Preferences`;
-- `History` and `Bookmarks`;
-- `Extensions` and `Extension State`;
-- `Extension Cookies`;
-- `Local Storage` and `Local Extension Settings`.
-
-It can proceed while the Helium profile is locked. hsync will not do this.
-Copying live LevelDB files and browser-managed preference data risks corruption,
-syncs more private data than an extension inventory requires, and does not map
-cleanly to Firefox.
-
-hsync remains metadata-only: browser APIs enumerate installed extensions, and
-the native companion transports the canonical inventory file. It never reads a
-browser profile directory.
-
-### Background last-writer-wins
-
-The reference resolves unattended file conflicts according to timestamps.
-hsync uses optimistic concurrency plus domain-aware three-way merge. An
-unresolvable identity or deletion conflict becomes review-required, not an
-automatic overwrite.
-
-### Force mode
-
-The reference extension invokes sync with force enabled because the active
-Helium profile is locked. hsync has no profile-file operation and therefore
-needs no force mode.
-
-### Platform scope
-
-The reference installation path is primarily Helium/Chromium-oriented even
-though WXT can build Firefox output. hsync treats Firefox native-host manifests,
-extension IDs, packaging, and tests as first-class release requirements.
-
-## Component layout
-
-```text
-native/hsyncd/
-  cmd/hsyncd/                Native Messaging entry point
-  internal/protocol/         framed, versioned request/event protocol
-  internal/git/              clone/fetch/commit/push
-  internal/keyring/          platform credential store
-  internal/inventory/        canonical validation and atomic IO
-  internal/lock/             single-operation process lock
-  internal/config/           non-secret configuration
-  internal/logging/          redacted structured logs
-  installers/
-    chromium/                native-host registration
-    firefox/                 native-host registration
-```
-
-The TypeScript extension and Go companion will share JSON Schema fixtures for
-protocol and inventory compatibility. Neither side ships a hand-maintained,
-independent interpretation of the wire format.
-
-## Security requirements
-
-- Native host allowed-extension IDs are explicit per signed browser package.
-- Repository URLs and branches are validated before storage or use.
-- HTTPS tokens and encryption secrets never cross back from the companion.
-- Logs redact URLs containing credentials, authorization headers, and secrets.
-- Git SSH verifies known hosts and provides a deliberate first-connect flow.
-- Working directories are permission-restricted and never user-configurable to
-  an arbitrary broad path.
-- Inventory writes use expected Git revision and fail closed on divergence.
-- Native protocol frames have size limits and schema validation.
-- Release builds are reproducible and companion binaries are checksummed.
-
-## Revised product modes
-
-| Capability | Browser-only | With `hsyncd` |
-|---|---:|---:|
-| Chromium/Helium inventory | Yes | Yes |
-| Firefox inventory | Yes | Yes |
-| Gitea REST API | Yes | Yes |
-| WebDAV | Yes | Yes |
-| S3-compatible | Yes | Yes |
-| Supported Git-host REST API | Yes | Yes |
-| Arbitrary Git HTTPS | No | Yes |
-| Git SSH / SSH agent | No | Yes |
-| OS keyring | No | Yes |
-| Browser profile-file copying | No | No |
+Read this document first. The trade-off has not changed since 2026-08-31:
+native-companion complexity and its associated security surface, against
+support for arbitrary SSH-only Git remotes and SSH-agent auth for a narrow
+audience that already has Gitea, WebDAV, and S3 as alternatives. Any renewed
+proposal should explain what has changed about that trade-off, not just that
+the feature would be nice to have again.
