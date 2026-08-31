@@ -31,7 +31,20 @@ function downloadInventory(inventory: InventoryDocument) {
   URL.revokeObjectURL(url);
 }
 
+const NAV_SECTIONS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'extensions', label: 'Extensions' },
+  { id: 'compare', label: 'Compare' },
+  { id: 'restore', label: 'Restore' },
+  { id: 'connections', label: 'Connections' },
+  { id: 'automation', label: 'Automation' },
+  { id: 'safety', label: 'Safety' },
+] as const;
+
 function App() {
+  const [activeSection, setActiveSection] = useState<string>(
+    () => window.location.hash.slice(1) || NAV_SECTIONS[0].id,
+  );
   const [inventory, setInventory] = useState<InventoryDocument | null>(null);
   const [baseline, setBaseline] = useState<InventoryDocument | null>(null);
   const [query, setQuery] = useState('');
@@ -359,13 +372,17 @@ function App() {
       <aside>
         <div className="wordmark"><span>h</span><strong>hsync</strong></div>
         <nav aria-label="Control center">
-          <a className="active" href="#overview">Overview</a>
-          <a href="#extensions">Extensions</a>
-          <a href="#compare">Compare</a>
-          <a href="#restore">Restore</a>
-          <a href="#connections">Connections</a>
-          <a href="#automation">Automation</a>
-          <a href="#safety">Safety</a>
+          {NAV_SECTIONS.map((section) => (
+            <a
+              key={section.id}
+              className={activeSection === section.id ? 'active' : undefined}
+              aria-current={activeSection === section.id ? 'page' : undefined}
+              href={`#${section.id}`}
+              onClick={() => setActiveSection(section.id)}
+            >
+              {section.label}
+            </a>
+          ))}
         </nav>
         <p>Local-only preview<br />Milestone 1</p>
       </aside>
