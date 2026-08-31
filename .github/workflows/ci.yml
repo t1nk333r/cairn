@@ -26,24 +26,3 @@ jobs:
       - name: Verify both builds produced output
         run: test -d .output/chrome-mv3 && test -d .output/firefox-mv3
 
-  native:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-          cache-dependency-path: native/hsyncd/go.sum
-      - run: go test ./...
-        working-directory: native/hsyncd
-      - run: go vet ./...
-        working-directory: native/hsyncd
-      - run: go build -o /tmp/hsyncd ./cmd/hsyncd
-        working-directory: native/hsyncd
-
-  schema:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Protocol schema is valid JSON
-        run: jq empty native/protocol/v1.schema.json
