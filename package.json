@@ -13,7 +13,6 @@
     "zip:firefox": "wxt zip -b firefox",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:native": "cd native/hsyncd && go test ./...",
     "test:watch": "vitest"
   },
   "dependencies": {

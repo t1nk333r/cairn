@@ -9,7 +9,6 @@ export default defineConfig({
     description: 'Sync your browser extension inventory using storage you control.',
     version: '0.1.0',
     permissions: ['management', 'storage', 'alarms'],
-    optional_permissions: ['nativeMessaging'],
     optional_host_permissions: [
       'https://*/*',
       'http://localhost/*',
