@@ -11,7 +11,8 @@ Milestone 1 is underway. The repository currently includes:
 - normalized extension inventory capture through the management API;
 - automatic recapture on install, uninstall, enable, and disable events;
 - local inventory persistence with hsync self-exclusion;
-- a compact popup and full-page inventory control center;
+- a full-page inventory control center, opened in its own tab from the
+  toolbar icon;
 - validated local JSON export/import using a separate comparison baseline;
 - a comparison view for missing, local-only, version, and state differences;
 - a WebDAV backend with connection testing, Pull, and protected Upload;

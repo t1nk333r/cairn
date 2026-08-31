@@ -64,6 +64,10 @@ export default defineBackground(() => {
     void captureAndSave();
   });
 
+  browser.action.onClicked.addListener(() => {
+    void browser.runtime.openOptionsPage();
+  });
+
   browser.management.onInstalled.addListener(() => scheduleCapture());
   browser.management.onUninstalled.addListener(() => scheduleCapture());
   browser.management.onEnabled.addListener(() => scheduleCapture());
@@ -278,15 +282,6 @@ export default defineBackground(() => {
       if (request.type === 'github:upload') {
         return uploadGitHubInventory()
           .then((inventory) => ({ ok: true as const, inventory }))
-          .catch((error: unknown) => ({
-            ok: false as const,
-            error: error instanceof Error ? error.message : String(error),
-          }));
-      }
-      if (request.type === 'options:open') {
-        return browser.runtime
-          .openOptionsPage()
-          .then(() => ({ ok: true as const }))
           .catch((error: unknown) => ({
             ok: false as const,
             error: error instanceof Error ? error.message : String(error),
