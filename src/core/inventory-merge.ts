@@ -72,7 +72,6 @@ export function mergeLocalObservation(
   // and prepare this device's own `stateByDevice` entry. Deliberately no
   // `deletedAt` key — a re-installed extension's tombstone must disappear,
   // not linger.
-  const observedIds = new Set<string>();
   const freshStateByPortableId = new Map<string, DeviceExtensionState>();
   const mintedRecords: Array<[string, ExtensionRecord]> = [];
 
@@ -85,14 +84,12 @@ export function mergeLocalObservation(
     };
     const matchedId = portableIdByAlias.get(item.id);
     if (matchedId !== undefined) {
-      observedIds.add(matchedId);
       freshStateByPortableId.set(matchedId, state);
       continue;
     }
     // No match anywhere: mint a new record, shaped exactly as `liftV1ToV2`
     // builds one.
     const portableId = newExtensionId();
-    observedIds.add(portableId);
     const aliases: Partial<Record<BrowserFamily, string[]>> = {
       [browserFamily]: [item.id],
     };
