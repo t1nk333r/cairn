@@ -17,6 +17,7 @@ export type HsyncRequest =
   | { type: 'webdav:get-config' }
   | { type: 'webdav:pull' }
   | { type: 'webdav:upload' }
+  | { type: 'webdav:upgrade' }
   | {
       type: 's3:test-and-save';
       config: Omit<StoredS3Config, 'hasSessionToken'> & {
@@ -27,6 +28,7 @@ export type HsyncRequest =
   | { type: 's3:get-config' }
   | { type: 's3:pull' }
   | { type: 's3:upload' }
+  | { type: 's3:upgrade' }
   | {
       type: 'gitea:test-and-save';
       config: StoredGiteaConfig & { token: string };
@@ -34,16 +36,19 @@ export type HsyncRequest =
   | { type: 'gitea:get-config' }
   | { type: 'gitea:pull' }
   | { type: 'gitea:upload' }
+  | { type: 'gitea:upgrade' }
   | {
       type: 'github:test-and-save';
       config: StoredGitHubConfig & { token: string };
     }
   | { type: 'github:get-config' }
   | { type: 'github:pull' }
-  | { type: 'github:upload' };
+  | { type: 'github:upload' }
+  | { type: 'github:upgrade' };
 
 export type HsyncResponse =
   | { ok: true; inventory: InventoryDocument | null }
+  | { ok: true; inventory: InventoryDocument; upgraded: boolean }
   | { ok: true; webdavConfig: StoredWebDavConfig | null }
   | { ok: true; s3Config: StoredS3Config | null }
   | { ok: true; giteaConfig: StoredGiteaConfig | null }
