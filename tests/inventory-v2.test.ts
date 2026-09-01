@@ -260,6 +260,69 @@ describe('serializeInventoryV2', () => {
     expect(serializeInventoryV2(forward)).toBe(serializeInventoryV2(reversed));
   });
 
+  it('is deterministic regardless of field order inside record values', () => {
+    // Fresh object literals on both sides, never shared references: a parsed
+    // document preserves the file's field order, so two files with identical
+    // content but different field order inside a DeviceRecord or a
+    // DeviceExtensionState must still serialize to identical bytes.
+    const x: InventoryDocumentV2 = {
+      schemaVersion: 2,
+      revision: '7',
+      updatedAt: '2026-08-31T09:00:00.000Z',
+      devices: {
+        laptop: {
+          label: 'Laptop',
+          browserFamily: 'chromium',
+          lastSeenAt: '2026-08-31T09:00:00.000Z',
+        },
+      },
+      extensions: {
+        'ext-example': {
+          name: 'Example',
+          aliases: { chromium: ['abcdefghijklmnopabcdefghijklmnop'] },
+          stateByDevice: {
+            laptop: {
+              installed: false,
+              enabled: false,
+              version: '1.2.3',
+              observedAt: '2026-08-31T09:00:00.000Z',
+              deletedAt: '2026-08-31T10:00:00.000Z',
+            },
+          },
+        },
+      },
+    };
+    const y: InventoryDocumentV2 = {
+      schemaVersion: 2,
+      revision: '7',
+      updatedAt: '2026-08-31T09:00:00.000Z',
+      devices: {
+        laptop: {
+          lastSeenAt: '2026-08-31T09:00:00.000Z',
+          browserFamily: 'chromium',
+          label: 'Laptop',
+        },
+      },
+      extensions: {
+        'ext-example': {
+          name: 'Example',
+          aliases: { chromium: ['abcdefghijklmnopabcdefghijklmnop'] },
+          stateByDevice: {
+            laptop: {
+              deletedAt: '2026-08-31T10:00:00.000Z',
+              observedAt: '2026-08-31T09:00:00.000Z',
+              version: '1.2.3',
+              enabled: false,
+              installed: false,
+            },
+          },
+        },
+      },
+    };
+
+    expect(serializeInventoryV2(x)).toBe(serializeInventoryV2(y));
+  });
+
   it('round-trips through parseInventoryJsonV2', () => {
     const original = fixture();
     expect(parseInventoryJsonV2(serializeInventoryV2(original))).toEqual(

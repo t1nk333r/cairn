@@ -165,6 +165,26 @@ function sortedRecord<T>(record: Record<string, T>): Record<string, T> {
   );
 }
 
+function canonicalDeviceRecord(record: DeviceRecord): DeviceRecord {
+  return {
+    label: record.label,
+    browserFamily: record.browserFamily,
+    lastSeenAt: record.lastSeenAt,
+  };
+}
+
+function canonicalDeviceState(
+  state: DeviceExtensionState,
+): DeviceExtensionState {
+  return {
+    installed: state.installed,
+    enabled: state.enabled,
+    version: state.version,
+    observedAt: state.observedAt,
+    ...(state.deletedAt !== undefined ? { deletedAt: state.deletedAt } : {}),
+  };
+}
+
 function canonicalAliases(
   aliases: Partial<Record<BrowserFamily, string[]>>,
 ): Partial<Record<BrowserFamily, string[]>> {
@@ -193,7 +213,14 @@ function canonicalExtensionRecord(record: ExtensionRecord): ExtensionRecord {
     ...(record.homepageUrl !== undefined
       ? { homepageUrl: record.homepageUrl }
       : {}),
-    stateByDevice: sortedRecord(record.stateByDevice),
+    stateByDevice: sortedRecord(
+      Object.fromEntries(
+        Object.entries(record.stateByDevice).map(([deviceId, state]) => [
+          deviceId,
+          canonicalDeviceState(state),
+        ]),
+      ),
+    ),
   };
 }
 
@@ -202,7 +229,14 @@ export function serializeInventoryV2(document: InventoryDocumentV2): string {
     schemaVersion: document.schemaVersion,
     revision: document.revision,
     updatedAt: document.updatedAt,
-    devices: sortedRecord(document.devices),
+    devices: sortedRecord(
+      Object.fromEntries(
+        Object.entries(document.devices).map(([deviceId, record]) => [
+          deviceId,
+          canonicalDeviceRecord(record),
+        ]),
+      ),
+    ),
     extensions: sortedRecord(
       Object.fromEntries(
         Object.entries(document.extensions).map(([id, record]) => [
