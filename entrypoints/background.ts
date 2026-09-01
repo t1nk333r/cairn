@@ -11,24 +11,28 @@ import { captureInventory } from '../src/core/inventory';
 import {
   configureAndTestWebDav,
   pullWebDavInventory,
+  upgradeWebDavInventory,
   uploadWebDavInventory,
 } from '../src/browser/webdav-service';
 import { loadWebDavConfig } from '../src/browser/webdav-store';
 import {
   configureAndTestS3,
   pullS3Inventory,
+  upgradeS3Inventory,
   uploadS3Inventory,
 } from '../src/browser/s3-service';
 import { loadS3Config } from '../src/browser/s3-store';
 import {
   configureAndTestGitea,
   pullGiteaInventory,
+  upgradeGiteaInventory,
   uploadGiteaInventory,
 } from '../src/browser/gitea-service';
 import { loadGiteaConfig } from '../src/browser/gitea-store';
 import {
   configureAndTestGitHub,
   pullGitHubInventory,
+  upgradeGitHubInventory,
   uploadGitHubInventory,
 } from '../src/browser/github-service';
 import { loadGitHubConfig } from '../src/browser/github-store';
@@ -156,6 +160,14 @@ export default defineBackground(() => {
             error: error instanceof Error ? error.message : String(error),
           }));
       }
+      if (request.type === 'webdav:upgrade') {
+        return upgradeWebDavInventory()
+          .then(({ inventory, upgraded }) => ({ ok: true as const, inventory, upgraded }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
       if (request.type === 's3:get-config') {
         return loadS3Config()
           .then((config) => ({
@@ -196,6 +208,14 @@ export default defineBackground(() => {
       if (request.type === 's3:upload') {
         return uploadS3Inventory()
           .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 's3:upgrade') {
+        return upgradeS3Inventory()
+          .then(({ inventory, upgraded }) => ({ ok: true as const, inventory, upgraded }))
           .catch((error: unknown) => ({
             ok: false as const,
             error: error instanceof Error ? error.message : String(error),
@@ -244,6 +264,14 @@ export default defineBackground(() => {
             error: error instanceof Error ? error.message : String(error),
           }));
       }
+      if (request.type === 'gitea:upgrade') {
+        return upgradeGiteaInventory()
+          .then(({ inventory, upgraded }) => ({ ok: true as const, inventory, upgraded }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
       if (request.type === 'github:get-config') {
         return loadGitHubConfig()
           .then((config) => ({
@@ -282,6 +310,14 @@ export default defineBackground(() => {
       if (request.type === 'github:upload') {
         return uploadGitHubInventory()
           .then((inventory) => ({ ok: true as const, inventory }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'github:upgrade') {
+        return upgradeGitHubInventory()
+          .then(({ inventory, upgraded }) => ({ ok: true as const, inventory, upgraded }))
           .catch((error: unknown) => ({
             ok: false as const,
             error: error instanceof Error ? error.message : String(error),

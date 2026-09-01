@@ -31,6 +31,12 @@ function downloadInventory(inventory: InventoryDocument) {
   URL.revokeObjectURL(url);
 }
 
+const UPGRADE_CONFIRM_MESSAGE =
+  'Convert this remote inventory to the multi-device format? The conversion cannot be undone, and every other device syncing with this remote will need an up-to-date version of hsync to keep reading it.';
+
+const UPGRADE_HELP_TEXT =
+  'Multi-device format lets each device record its own state, so two browsers can sync to the same remote without overwriting each other.';
+
 const NAV_SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'extensions', label: 'Extensions' },
@@ -226,6 +232,26 @@ function App() {
     }
   };
 
+  const runWebDavUpgrade = async () => {
+    if (!window.confirm(UPGRADE_CONFIRM_MESSAGE)) return;
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('upgrade');
+    try {
+      const response = await sendRequest({ type: 'webdav:upgrade' });
+      if (!response.ok) throw new Error(response.error);
+      setNotice(
+        'upgraded' in response && !response.upgraded
+          ? 'This inventory is already in the multi-device format.'
+          : 'Remote inventory converted to the multi-device format.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
   const testAndSaveS3 = async () => {
     setError(null);
     setNotice(null);
@@ -263,6 +289,26 @@ function App() {
         action === 'pull'
           ? 'S3 inventory pulled into Compare.'
           : 'Local inventory uploaded to S3 with conflict protection.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const runS3Upgrade = async () => {
+    if (!window.confirm(UPGRADE_CONFIRM_MESSAGE)) return;
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('s3-upgrade');
+    try {
+      const response = await sendRequest({ type: 's3:upgrade' });
+      if (!response.ok) throw new Error(response.error);
+      setNotice(
+        'upgraded' in response && !response.upgraded
+          ? 'This inventory is already in the multi-device format.'
+          : 'S3 inventory converted to the multi-device format.',
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -338,6 +384,26 @@ function App() {
     }
   };
 
+  const runGitHubUpgrade = async () => {
+    if (!window.confirm(UPGRADE_CONFIRM_MESSAGE)) return;
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('github-upgrade');
+    try {
+      const response = await sendRequest({ type: 'github:upgrade' });
+      if (!response.ok) throw new Error(response.error);
+      setNotice(
+        'upgraded' in response && !response.upgraded
+          ? 'This inventory is already in the multi-device format.'
+          : 'Git inventory converted to the multi-device format.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
   const runGiteaAction = async (action: 'pull' | 'upload') => {
     setError(null);
     setNotice(null);
@@ -350,6 +416,26 @@ function App() {
         action === 'pull'
           ? 'Gitea inventory pulled into Compare.'
           : 'Local inventory committed to Gitea with conflict protection.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const runGiteaUpgrade = async () => {
+    if (!window.confirm(UPGRADE_CONFIRM_MESSAGE)) return;
+    setError(null);
+    setNotice(null);
+    setRemoteBusy('gitea-upgrade');
+    try {
+      const response = await sendRequest({ type: 'gitea:upgrade' });
+      if (!response.ok) throw new Error(response.error);
+      setNotice(
+        'upgraded' in response && !response.upgraded
+          ? 'This inventory is already in the multi-device format.'
+          : 'Gitea inventory converted to the multi-device format.',
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -550,12 +636,16 @@ function App() {
               />
               <small>Use a fine-grained token with Contents read/write access to this repository.</small>
             </label>
+            <p className="cors-note wide-field">{UPGRADE_HELP_TEXT}</p>
           </div>
           <div className="connection-footer">
             <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveGitHub()}>
               {remoteBusy === 'github-test' ? 'Testing…' : 'Test & save'}
             </button>
             <div>
+              <button className="secondary-button" disabled={!githubSaved || remoteBusy !== null} onClick={() => void runGitHubUpgrade()}>
+                {remoteBusy === 'github-upgrade' ? 'Upgrading…' : 'Upgrade to multi-device'}
+              </button>
               <button className="secondary-button" disabled={!githubSaved || remoteBusy !== null} onClick={() => void runGitHubAction('pull')}>
                 {remoteBusy === 'github-pull' ? 'Pulling…' : 'Pull'}
               </button>
@@ -643,12 +733,16 @@ function App() {
               />
               <small>Use a token restricted to repository read/write access. It stays in this browser profile.</small>
             </label>
+            <p className="cors-note wide-field">{UPGRADE_HELP_TEXT}</p>
           </div>
           <div className="connection-footer">
             <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveGitea()}>
               {remoteBusy === 'gitea-test' ? 'Testing…' : 'Test & save'}
             </button>
             <div>
+              <button className="secondary-button" disabled={!giteaSaved || remoteBusy !== null} onClick={() => void runGiteaUpgrade()}>
+                {remoteBusy === 'gitea-upgrade' ? 'Upgrading…' : 'Upgrade to multi-device'}
+              </button>
               <button className="secondary-button" disabled={!giteaSaved || remoteBusy !== null} onClick={() => void runGiteaAction('pull')}>
                 {remoteBusy === 'gitea-pull' ? 'Pulling…' : 'Pull'}
               </button>
@@ -717,12 +811,16 @@ function App() {
               />
               <small>Stored only in this browser profile. HTTPS is required except on localhost.</small>
             </label>
+            <p className="cors-note wide-field">{UPGRADE_HELP_TEXT}</p>
           </div>
           <div className="connection-footer">
             <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveWebDav()}>
               {remoteBusy === 'test' ? 'Testing…' : 'Test & save'}
             </button>
             <div>
+              <button className="secondary-button" disabled={!webdavSaved || remoteBusy !== null} onClick={() => void runWebDavUpgrade()}>
+                {remoteBusy === 'upgrade' ? 'Upgrading…' : 'Upgrade to multi-device'}
+              </button>
               <button className="secondary-button" disabled={!webdavSaved || remoteBusy !== null} onClick={() => void runWebDavAction('pull')}>
                 {remoteBusy === 'pull' ? 'Pulling…' : 'Pull'}
               </button>
@@ -835,12 +933,16 @@ function App() {
               <span>Use path-style addressing (recommended for MinIO, RustFS, localhost, and buckets containing dots)</span>
             </label>
             <p className="cors-note wide-field">The bucket must allow GET, HEAD, and PUT from this extension and expose the ETag response header through CORS.</p>
+            <p className="cors-note wide-field">{UPGRADE_HELP_TEXT}</p>
           </div>
           <div className="connection-footer">
             <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveS3()}>
               {remoteBusy === 's3-test' ? 'Testing…' : 'Test & save'}
             </button>
             <div>
+              <button className="secondary-button" disabled={!s3Saved || remoteBusy !== null} onClick={() => void runS3Upgrade()}>
+                {remoteBusy === 's3-upgrade' ? 'Upgrading…' : 'Upgrade to multi-device'}
+              </button>
               <button className="secondary-button" disabled={!s3Saved || remoteBusy !== null} onClick={() => void runS3Action('pull')}>
                 {remoteBusy === 's3-pull' ? 'Pulling…' : 'Pull'}
               </button>
