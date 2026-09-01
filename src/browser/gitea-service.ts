@@ -1,20 +1,24 @@
 import { BackendError } from '../backends/contract';
 import { GiteaBackend, normalizeGiteaConfig, type GiteaConfig } from '../backends/gitea';
-import { parseInventoryJson, serializeInventory } from '../core/inventory';
 import {
-  loadComparisonBaseline,
-  loadInventory,
-  saveComparisonBaseline,
-} from './inventory-store';
+  INVENTORY_SCHEMA_VERSION,
+  type DeviceObservation,
+  type InventoryDocument,
+} from '../core/inventory';
+import { projectDeviceInventory } from '../core/inventory-projection';
+import type { InventoryDocumentV2 } from '../core/inventory-v2';
+import { getDeviceObservation } from './device';
 import {
   loadGiteaConfig,
-  loadGiteaRemoteVersion,
   saveGiteaConfig,
   saveGiteaRemoteVersion,
 } from './gitea-store';
-
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+import { loadInventory, saveComparisonBaseline } from './inventory-store';
+import {
+  readRemoteDocument,
+  syncV2,
+  upgradeRemoteToV2,
+} from './inventory-sync';
 
 async function configuredBackend(): Promise<GiteaBackend> {
   const config = await loadGiteaConfig();
@@ -30,16 +34,46 @@ export async function configureAndTestGitea(config: GiteaConfig) {
   return normalized;
 }
 
+// A v2 document with no record for this device is the normal first-pull state
+// of a device that has never synced, not corruption — project it as empty
+// instead of letting `projectDeviceInventory` throw.
+function projectForDevice(
+  document: InventoryDocumentV2,
+  device: DeviceObservation,
+): InventoryDocument {
+  if (document.devices[device.id] === undefined) {
+    return {
+      schemaVersion: INVENTORY_SCHEMA_VERSION,
+      generatedAt: document.updatedAt,
+      device,
+      extensions: [],
+    };
+  }
+  return projectDeviceInventory(document, device.id);
+}
+
 export async function pullGiteaInventory() {
   const backend = await configuredBackend();
-  const remote = await backend.read();
-  if (!remote) {
+  const shape = await readRemoteDocument(backend);
+  if (shape.kind === 'absent') {
     throw new BackendError('not_found', 'No hsync inventory exists at this repository path yet.');
   }
-  const inventory = parseInventoryJson(decoder.decode(remote.data));
+  // A v1 remote is still legitimate until the user runs the upgrade action;
+  // keep today's behavior exactly so single-device users keep working.
+  if (shape.kind === 'v1') {
+    await Promise.all([
+      saveComparisonBaseline(shape.document),
+      saveGiteaRemoteVersion(shape.version),
+    ]);
+    return shape.document;
+  }
+  const device = await getDeviceObservation();
+  const inventory = projectForDevice(shape.document, device);
+  // The baseline is stored projected so the options page's Compare view keeps
+  // consuming the v1 shape it already understands.
   await Promise.all([
     saveComparisonBaseline(inventory),
-    saveGiteaRemoteVersion(remote.version),
+    saveGiteaRemoteVersion(shape.version),
   ]);
   return inventory;
 }
@@ -48,21 +82,31 @@ export async function uploadGiteaInventory() {
   const backend = await configuredBackend();
   const inventory = await loadInventory();
   if (!inventory) throw new BackendError('not_found', 'Scan local extensions before uploading.');
-  const [knownVersion, baseline] = await Promise.all([
-    loadGiteaRemoteVersion(),
-    loadComparisonBaseline(),
-  ]);
-  if (baseline && !knownVersion) {
-    throw new BackendError(
-      'conflict',
-      'Pull the Gitea inventory before replacing an imported comparison baseline.',
-    );
-  }
-  const result = await backend.write({
-    data: encoder.encode(serializeInventory(inventory)),
-    expectedVersion: knownVersion,
-  });
+
+  const device = await getDeviceObservation();
+  // `syncV2` merges this device's observation into the remote union instead
+  // of overwriting the whole document, handling versioning and conflict
+  // retries itself. The old `baseline && !knownVersion` pre-check guarded an
+  // imported baseline against a whole-document overwrite; merging removes
+  // that hazard, so the pre-check is gone.
+  const result = await syncV2({ backend, local: inventory });
   await saveGiteaRemoteVersion(result.version);
-  return inventory;
+  return projectForDevice(result.document, device);
 }
 
+export interface UpgradeInventoryResult {
+  inventory: InventoryDocument;
+  /** false when the remote was already v2 and nothing was written. */
+  upgraded: boolean;
+}
+
+export async function upgradeGiteaInventory(): Promise<UpgradeInventoryResult> {
+  const backend = await configuredBackend();
+  const device = await getDeviceObservation();
+  const result = await upgradeRemoteToV2(backend);
+  await saveGiteaRemoteVersion(result.version);
+  return {
+    inventory: projectForDevice(result.document, device),
+    upgraded: result.upgraded,
+  };
+}
