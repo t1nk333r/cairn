@@ -94,10 +94,19 @@ export async function uploadGitHubInventory() {
   return projectForDevice(result.document, device);
 }
 
-export async function upgradeGitHubInventory(): Promise<InventoryDocument> {
+export interface UpgradeInventoryResult {
+  inventory: InventoryDocument;
+  /** false when the remote was already v2 and nothing was written. */
+  upgraded: boolean;
+}
+
+export async function upgradeGitHubInventory(): Promise<UpgradeInventoryResult> {
   const backend = await configuredBackend();
   const device = await getDeviceObservation();
   const result = await upgradeRemoteToV2(backend);
   await saveGitHubRemoteVersion(result.version);
-  return projectForDevice(result.document, device);
+  return {
+    inventory: projectForDevice(result.document, device),
+    upgraded: result.upgraded,
+  };
 }

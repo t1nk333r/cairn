@@ -400,16 +400,31 @@ describe('GitHub service (v2 sync path)', () => {
     const v1 = laptopCapture([item('legacy-ext', { name: 'Legacy' })]);
     const seedVersion = fake.seed(serializeInventory(v1));
 
-    const inventory = await upgradeGitHubInventory();
+    const result = await upgradeGitHubInventory();
 
+    expect(result.upgraded).toBe(true);
     expect(fake.writeCalls).toHaveLength(1);
     expect(fake.writeCalls[0]?.expectedVersion).toBe(seedVersion);
     const written = parseInventoryJsonV2(fake.writtenText(0));
     expect(written.schemaVersion).toBe(2);
     expect(written.devices['laptop']).toBeDefined();
-    expect(inventory.schemaVersion).toBe(1);
-    expect(inventory.device.id).toBe('laptop');
-    expect(inventory.extensions.map((entry) => entry.name)).toEqual(['Legacy']);
+    expect(result.inventory.schemaVersion).toBe(1);
+    expect(result.inventory.device.id).toBe('laptop');
+    expect(result.inventory.extensions.map((entry) => entry.name)).toEqual(['Legacy']);
     expect(await loadGitHubRemoteVersion()).toBe('v2');
+  });
+
+  it('upgrade against an already-v2 remote reports upgraded: false and writes nothing', async () => {
+    fake.seed(serializeInventoryV2(sharedRemote()));
+
+    const result = await upgradeGitHubInventory();
+
+    expect(result.upgraded).toBe(false);
+    expect(fake.writeCalls).toHaveLength(0);
+    expect(result.inventory.device.id).toBe('laptop');
+    expect(result.inventory.extensions.map((entry) => entry.id)).toEqual([
+      'shared-chromium-id',
+    ]);
+    expect(await loadGitHubRemoteVersion()).toBe('v1');
   });
 });

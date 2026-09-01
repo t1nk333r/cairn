@@ -94,10 +94,19 @@ export async function uploadWebDavInventory() {
   return projectForDevice(result.document, device);
 }
 
-export async function upgradeWebDavInventory(): Promise<InventoryDocument> {
+export interface UpgradeInventoryResult {
+  inventory: InventoryDocument;
+  /** false when the remote was already v2 and nothing was written. */
+  upgraded: boolean;
+}
+
+export async function upgradeWebDavInventory(): Promise<UpgradeInventoryResult> {
   const backend = await configuredBackend();
   const device = await getDeviceObservation();
   const result = await upgradeRemoteToV2(backend);
   await saveWebDavRemoteVersion(result.version);
-  return projectForDevice(result.document, device);
+  return {
+    inventory: projectForDevice(result.document, device),
+    upgraded: result.upgraded,
+  };
 }
