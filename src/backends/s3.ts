@@ -187,8 +187,12 @@ export class S3Backend implements InventoryBackend {
       now: this.now(),
     });
     try {
+      // Never follow a redirect on a signed request: the SigV4 Authorization
+      // header and any x-amz-security-token would be replayed to the redirect
+      // target.
       return await this.fetcher(this.url, {
         method,
+        redirect: 'error',
         headers: signedHeaders,
         ...(method === 'PUT' ? { body: payload as BodyInit } : {}),
       });

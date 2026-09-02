@@ -37,6 +37,46 @@ const encodePath = (value: string) =>
     .map((segment) => encodeURIComponent(segment))
     .join('/');
 
+// Repository paths are interpolated into API URLs; a `..` or empty segment can
+// walk out of the intended location, and a `.git` segment addresses repository
+// internals. Reject them rather than normalizing, so a surprising config fails
+// loudly instead of writing somewhere unexpected.
+function assertSafeRepositoryPath(filePath: string, label: string): void {
+  const segments = filePath.split('/');
+  if (
+    segments.some(
+      (segment) =>
+        segment === '' ||
+        segment === '.' ||
+        segment === '..' ||
+        segment.toLowerCase() === '.git',
+    )
+  ) {
+    throw new BackendError(
+      'invalid_config',
+      `The ${label} file path cannot contain empty, "." , ".." or ".git" segments.`,
+    );
+  }
+}
+
+// Branch names reach the API as a path segment and a JSON field. Keep them to
+// the conservative subset Git itself accepts, and never let one start with a
+// dash, which would read as an option to anything that shells out later.
+const SAFE_BRANCH = /^[A-Za-z0-9._\/-]+$/;
+
+function assertSafeBranch(branch: string, label: string): void {
+  if (
+    !SAFE_BRANCH.test(branch) ||
+    branch.includes('..') ||
+    branch.startsWith('-') ||
+    branch.startsWith('/') ||
+    branch.endsWith('/') ||
+    branch.endsWith('.lock')
+  ) {
+    throw new BackendError('invalid_config', `Enter a valid ${label} branch name.`);
+  }
+}
+
 export function normalizeGiteaConfig(config: GiteaConfig): GiteaConfig {
   let baseUrl: URL;
   try {
@@ -67,6 +107,8 @@ export function normalizeGiteaConfig(config: GiteaConfig): GiteaConfig {
   if (!filePath || filePath.endsWith('/')) {
     throw new BackendError('invalid_config', 'Enter a repository file path.');
   }
+  assertSafeRepositoryPath(filePath, 'Gitea');
+  assertSafeBranch(branch, 'Gitea');
   baseUrl.pathname = baseUrl.pathname.replace(/\/+$/, '');
   return {
     baseUrl: baseUrl.href.replace(/\/$/, ''),
@@ -222,7 +264,9 @@ export class GiteaBackend implements InventoryBackend {
 
   private async request(input: string, init: RequestInit): Promise<Response> {
     try {
-      return await this.fetcher(input, init);
+      // Never follow a redirect on a credentialed request: the Authorization
+      // header would be replayed to whatever host the redirect names.
+      return await this.fetcher(input, { ...init, redirect: 'error' });
     } catch (cause) {
       throw new BackendError(
         'network',

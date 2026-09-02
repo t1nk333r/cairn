@@ -67,6 +67,19 @@ export class InventoryFormatError extends Error {
 
 const CHROMIUM_STORE_ID = /^[a-p]{32}$/;
 
+// Extension-supplied URLs end up rendered as clickable links in a page that
+// holds the `management` permission, so only ordinary web schemes may survive.
+// `javascript:`, `data:`, and friends are dropped rather than sanitized.
+export function safeExternalUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value === '') return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function defined<T extends object>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== ''),
@@ -81,7 +94,7 @@ export function inferSourceUrl(
     return `https://chromewebstore.google.com/detail/${item.id}`;
   }
 
-  return item.homepageUrl || item.updateUrl || undefined;
+  return safeExternalUrl(item.homepageUrl) ?? safeExternalUrl(item.updateUrl);
 }
 
 export function normalizeExtension(
@@ -151,6 +164,9 @@ export function isInventoryDocument(value: unknown): value is InventoryDocument 
         typeof item.enabled === 'boolean' &&
         typeof item.type === 'string' &&
         typeof item.observedAt === 'string' &&
+        (item.sourceUrl === undefined || typeof item.sourceUrl === 'string') &&
+        (item.homepageUrl === undefined || typeof item.homepageUrl === 'string') &&
+        (item.updateUrl === undefined || typeof item.updateUrl === 'string') &&
         (item.browserFamily === 'chromium' || item.browserFamily === 'firefox'),
     )
   );

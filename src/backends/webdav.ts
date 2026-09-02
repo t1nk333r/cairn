@@ -175,7 +175,9 @@ export class WebDavBackend implements InventoryBackend {
 
   private async request(input: string, init: RequestInit): Promise<Response> {
     try {
-      return await this.fetcher(input, init);
+      // Never follow a redirect on a credentialed request: the Authorization
+      // header would be replayed to whatever host the redirect names.
+      return await this.fetcher(input, { ...init, redirect: 'error' });
     } catch (cause) {
       throw new BackendError(
         'network',

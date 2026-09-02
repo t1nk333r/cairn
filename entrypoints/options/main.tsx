@@ -6,6 +6,7 @@ import {
   parseInventoryJson,
   serializeInventory,
   type InventoryDocument,
+  safeExternalUrl,
 } from '../../src/core/inventory';
 import { normalizeWebDavConfig, webDavOriginPattern } from '../../src/backends/webdav';
 import { normalizeS3Config, s3OriginPattern } from '../../src/backends/s3';
@@ -544,7 +545,7 @@ function App() {
                   {comparison.onlyRemote.map((item) => (
                     <article key={`remote:${item.browserFamily}:${item.id}`}>
                       <div><strong>{item.name}</strong><span>{item.browserFamily} · v{item.version}</span></div>
-                      {item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer">Open source ↗</a> : <span className="no-source">Source unknown</span>}
+                      {safeExternalUrl(item.sourceUrl) ? <a href={item.sourceUrl} target="_blank" rel="noreferrer">Open source ↗</a> : <span className="no-source">Source unknown</span>}
                     </article>
                   ))}
                 </div>
