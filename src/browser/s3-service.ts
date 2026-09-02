@@ -14,10 +14,19 @@ import {
   syncV2,
   upgradeRemoteToV2,
 } from './inventory-sync';
+import type { BookmarkDocument } from '../core/bookmarks';
+import { saveBookmarksBaseline } from './bookmarks';
+import {
+  bookmarksSibling,
+  readBookmarkDocument,
+  writeBookmarkDocument,
+} from './bookmarks-sync';
 import {
   loadS3Config,
   saveS3Config,
   saveS3RemoteVersion,
+  loadS3BookmarksVersion,
+  saveS3BookmarksVersion,
 } from './s3-store';
 
 async function configuredBackend(): Promise<S3Backend> {
@@ -109,4 +118,36 @@ export async function upgradeS3Inventory(): Promise<UpgradeInventoryResult> {
     inventory: projectForDevice(result.document, device),
     upgraded: result.upgraded,
   };
+}
+
+
+// Bookmark backups live beside the inventory, in a sibling file derived from
+// the configured path, so one connection covers both.
+async function bookmarksBackend(): Promise<S3Backend> {
+  const config = await loadS3Config();
+  if (!config) throw new BackendError('invalid_config', 'Configure S3 first.');
+  return new S3Backend({ ...config, objectKey: bookmarksSibling(config.objectKey) });
+}
+
+export async function pullS3Bookmarks(): Promise<BookmarkDocument> {
+  const remote = await readBookmarkDocument(await bookmarksBackend());
+  if (!remote) {
+    throw new BackendError('not_found', 'No bookmark backup exists at this S3 location yet.');
+  }
+  await saveBookmarksBaseline(remote.document);
+  await saveS3BookmarksVersion(remote.version);
+  return remote.document;
+}
+
+export async function backUpS3Bookmarks(
+  document: BookmarkDocument,
+): Promise<BookmarkDocument> {
+  const backend = await bookmarksBackend();
+  const result = await writeBookmarkDocument({
+    backend,
+    document,
+    expectedVersion: await loadS3BookmarksVersion(),
+  });
+  await saveS3BookmarksVersion(result.version);
+  return document;
 }

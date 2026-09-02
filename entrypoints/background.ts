@@ -9,10 +9,19 @@ import {
 import type { HsyncRequest, HsyncResponse } from '../src/browser/messages';
 import { captureInventory } from '../src/core/inventory';
 import {
+  captureLocalBookmarks,
+  loadBookmarks,
+  loadBookmarksBaseline,
+  restoreBookmarks,
+  saveBookmarks,
+} from '../src/browser/bookmarks';
+import {
   configureAndTestWebDav,
   pullWebDavInventory,
   upgradeWebDavInventory,
   uploadWebDavInventory,
+  pullWebDavBookmarks,
+  backUpWebDavBookmarks,
 } from '../src/browser/webdav-service';
 import { loadWebDavConfig } from '../src/browser/webdav-store';
 import {
@@ -20,6 +29,8 @@ import {
   pullS3Inventory,
   upgradeS3Inventory,
   uploadS3Inventory,
+  pullS3Bookmarks,
+  backUpS3Bookmarks,
 } from '../src/browser/s3-service';
 import { loadS3Config } from '../src/browser/s3-store';
 import {
@@ -27,6 +38,8 @@ import {
   pullGiteaInventory,
   upgradeGiteaInventory,
   uploadGiteaInventory,
+  pullGiteaBookmarks,
+  backUpGiteaBookmarks,
 } from '../src/browser/gitea-service';
 import { loadGiteaConfig } from '../src/browser/gitea-store';
 import {
@@ -34,6 +47,8 @@ import {
   pullGitHubInventory,
   upgradeGitHubInventory,
   uploadGitHubInventory,
+  pullGitHubBookmarks,
+  backUpGitHubBookmarks,
 } from '../src/browser/github-service';
 import { loadGitHubConfig } from '../src/browser/github-store';
 
@@ -114,6 +129,132 @@ export default defineBackground(() => {
       if (request.type === 'baseline:clear') {
         return clearComparisonBaseline()
           .then(() => ({ ok: true as const, inventory: null }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'bookmarks:capture') {
+        return getDeviceObservation()
+          .then((device) =>
+            captureLocalBookmarks({
+              api: browser.bookmarks,
+              device,
+            }),
+          )
+          .then(async (bookmarks) => {
+            await saveBookmarks(bookmarks);
+            return { ok: true as const, bookmarks };
+          })
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'bookmarks:get') {
+        return loadBookmarks()
+          .then((bookmarks) => ({ ok: true as const, bookmarks }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'bookmarks:restore') {
+        // Restore uses the pulled remote backup when there is one, so the
+        // action restores what the user just compared against rather than a
+        // stale local capture.
+        return loadBookmarksBaseline()
+          .then(async (baseline) => baseline ?? (await loadBookmarks()))
+          .then(async (document) => {
+            if (!document) {
+              throw new Error('Pull or scan a bookmark backup before restoring.');
+            }
+            const restore = await restoreBookmarks({
+              api: browser.bookmarks,
+              document,
+            });
+            return { ok: true as const, restore };
+          })
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'webdav:bookmarks-pull') {
+        return pullWebDavBookmarks()
+          .then((bookmarks) => ({ ok: true as const, bookmarks }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'webdav:bookmarks-backup') {
+        return loadBookmarks()
+          .then(async (bookmarks) => {
+            if (!bookmarks) throw new Error('Scan bookmarks before backing them up.');
+            return backUpWebDavBookmarks(bookmarks);
+          })
+          .then((bookmarks) => ({ ok: true as const, bookmarks }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 's3:bookmarks-pull') {
+        return pullS3Bookmarks()
+          .then((bookmarks) => ({ ok: true as const, bookmarks }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 's3:bookmarks-backup') {
+        return loadBookmarks()
+          .then(async (bookmarks) => {
+            if (!bookmarks) throw new Error('Scan bookmarks before backing them up.');
+            return backUpS3Bookmarks(bookmarks);
+          })
+          .then((bookmarks) => ({ ok: true as const, bookmarks }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'gitea:bookmarks-pull') {
+        return pullGiteaBookmarks()
+          .then((bookmarks) => ({ ok: true as const, bookmarks }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'gitea:bookmarks-backup') {
+        return loadBookmarks()
+          .then(async (bookmarks) => {
+            if (!bookmarks) throw new Error('Scan bookmarks before backing them up.');
+            return backUpGiteaBookmarks(bookmarks);
+          })
+          .then((bookmarks) => ({ ok: true as const, bookmarks }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'github:bookmarks-pull') {
+        return pullGitHubBookmarks()
+          .then((bookmarks) => ({ ok: true as const, bookmarks }))
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+      }
+      if (request.type === 'github:bookmarks-backup') {
+        return loadBookmarks()
+          .then(async (bookmarks) => {
+            if (!bookmarks) throw new Error('Scan bookmarks before backing them up.');
+            return backUpGitHubBookmarks(bookmarks);
+          })
+          .then((bookmarks) => ({ ok: true as const, bookmarks }))
           .catch((error: unknown) => ({
             ok: false as const,
             error: error instanceof Error ? error.message : String(error),

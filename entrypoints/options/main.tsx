@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import type { HsyncRequest, HsyncResponse } from '../../src/browser/messages';
 import { diffInventories } from '../../src/core/diff';
+import { countBookmarks, type BookmarkDocument } from '../../src/core/bookmarks';
+import type { RestoreSummary } from '../../src/browser/bookmarks';
 import {
   parseInventoryJson,
   serializeInventory,
@@ -35,6 +37,9 @@ function downloadInventory(inventory: InventoryDocument) {
 const UPGRADE_CONFIRM_MESSAGE =
   'Convert this remote inventory to the multi-device format? The conversion cannot be undone, and every other device syncing with this remote will need an up-to-date version of hsync to keep reading it.';
 
+const RESTORE_CONFIRM_MESSAGE =
+  'Restore this bookmark backup? Everything is recreated inside a new, dated folder under Other bookmarks. Nothing you already have is changed, moved, or deleted \u2014 delete that folder if you change your mind.';
+
 const UPGRADE_HELP_TEXT =
   "Each device keeps its own record of what's installed, so a second browser syncing to the same remote adds to the inventory instead of replacing it. Convert a remote once, from any device.";
 
@@ -46,6 +51,7 @@ const NAV_SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'extensions', label: 'Extensions' },
   { id: 'compare', label: 'Compare' },
+  { id: 'bookmarks', label: 'Bookmarks' },
   { id: 'connections', label: 'Connections' },
 ] as const;
 
@@ -62,6 +68,9 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [remoteBusy, setRemoteBusy] = useState<string | null>(null);
+  const [bookmarks, setBookmarks] = useState<BookmarkDocument | null>(null);
+  const [restoreSummary, setRestoreSummary] = useState<RestoreSummary | null>(null);
+  const [bookmarkTarget, setBookmarkTarget] = useState<'webdav' | 's3' | 'gitea' | 'github'>('webdav');
   const [webdavSaved, setWebdavSaved] = useState(false);
   const [s3Saved, setS3Saved] = useState(false);
   const [giteaSaved, setGiteaSaved] = useState(false);
@@ -117,6 +126,12 @@ export function App() {
   }, []);
 
   useEffect(() => void load(), [load]);
+
+  useEffect(() => {
+    void sendRequest({ type: 'bookmarks:get' }).then((response) => {
+      if (response.ok && 'bookmarks' in response) setBookmarks(response.bookmarks);
+    });
+  }, []);
 
   useEffect(() => {
     void sendRequest({ type: 'baseline:get' }).then((response) => {
@@ -234,6 +249,36 @@ export function App() {
     } finally {
       setRemoteBusy(null);
     }
+  };
+
+  const runBookmarkRequest = async (request: HsyncRequest, busyKey: string) => {
+    setError(null);
+    setNotice(null);
+    setRemoteBusy(busyKey);
+    try {
+      const response = await sendRequest(request);
+      if (!response.ok) throw new Error(response.error);
+      if ('bookmarks' in response && response.bookmarks) {
+        setBookmarks(response.bookmarks);
+        const counts = countBookmarks(response.bookmarks.roots);
+        setNotice(`${counts.bookmarks} bookmarks in ${counts.folders} folders.`);
+      }
+      if ('restore' in response) {
+        setRestoreSummary(response.restore);
+        setNotice(
+          `Restored ${response.restore.createdBookmarks} bookmarks into "${response.restore.folderTitle}".`,
+        );
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const restoreBookmarkBackup = async () => {
+    if (!window.confirm(RESTORE_CONFIRM_MESSAGE)) return;
+    await runBookmarkRequest({ type: 'bookmarks:restore' }, 'bookmarks-restore');
   };
 
   const runWebDavUpgrade = async () => {
@@ -560,6 +605,88 @@ export function App() {
           ) : (
             <div className="empty-state compact"><strong>No comparison inventory</strong><p>Export on one device and import on another. Remote backends will automate this next.</p></div>
           )}
+        </section>
+
+        <section className="compare-card" id="bookmarks">
+          <div className="section-heading">
+            <div>
+              <h2>Bookmarks</h2>
+              <p>
+                Back up the bookmark tree to the same storage as your extension
+                inventory. Restore is additive: it recreates the backup in a new
+                dated folder and never touches what you already have.
+              </p>
+            </div>
+            <span className="connection-status">
+              {bookmarks
+                ? `${countBookmarks(bookmarks.roots).bookmarks} bookmarks · ${countBookmarks(bookmarks.roots).folders} folders`
+                : 'Not scanned'}
+            </span>
+          </div>
+          <div className="connection-content">
+            <label className="wide-field">
+              <span>Back up to</span>
+              <select
+                value={bookmarkTarget}
+                onChange={(event) =>
+                  setBookmarkTarget(event.target.value as typeof bookmarkTarget)
+                }
+              >
+                <option value="webdav">WebDAV</option>
+                <option value="s3">S3-compatible</option>
+                <option value="gitea">Gitea</option>
+                <option value="github">GitHub</option>
+              </select>
+            </label>
+            {restoreSummary && (
+              <p className="cors-note wide-field">
+                Last restore created {restoreSummary.createdBookmarks} bookmarks and{' '}
+                {restoreSummary.createdFolders} folders in "{restoreSummary.folderTitle}".
+                {restoreSummary.skipped > 0
+                  ? ` ${restoreSummary.skipped} entries were refused by the browser.`
+                  : ''}
+              </p>
+            )}
+            <div className="button-row">
+              <button
+                className="secondary-button"
+                disabled={remoteBusy !== null}
+                onClick={() => void runBookmarkRequest({ type: 'bookmarks:capture' }, 'bookmarks-scan')}
+              >
+                {remoteBusy === 'bookmarks-scan' ? 'Scanning…' : 'Scan bookmarks'}
+              </button>
+              <button
+                className="secondary-button"
+                disabled={remoteBusy !== null}
+                onClick={() =>
+                  void runBookmarkRequest(
+                    { type: `${bookmarkTarget}:bookmarks-pull` } as HsyncRequest,
+                    'bookmarks-pull',
+                  )
+                }
+              >
+                {remoteBusy === 'bookmarks-pull' ? 'Pulling…' : 'Pull backup'}
+              </button>
+              <button
+                disabled={!bookmarks || remoteBusy !== null}
+                onClick={() =>
+                  void runBookmarkRequest(
+                    { type: `${bookmarkTarget}:bookmarks-backup` } as HsyncRequest,
+                    'bookmarks-backup',
+                  )
+                }
+              >
+                {remoteBusy === 'bookmarks-backup' ? 'Backing up…' : 'Back up'}
+              </button>
+              <button
+                className="secondary-button"
+                disabled={remoteBusy !== null}
+                onClick={() => void restoreBookmarkBackup()}
+              >
+                {remoteBusy === 'bookmarks-restore' ? 'Restoring…' : 'Restore into new folder'}
+              </button>
+            </div>
+          </div>
         </section>
 
         <section className="connection-card" id="connections">

@@ -12,6 +12,8 @@ import {
   loadGitHubConfig,
   saveGitHubConfig,
   saveGitHubRemoteVersion,
+  loadGitHubBookmarksVersion,
+  saveGitHubBookmarksVersion,
 } from './github-store';
 import { loadInventory, saveComparisonBaseline } from './inventory-store';
 import {
@@ -19,6 +21,13 @@ import {
   syncV2,
   upgradeRemoteToV2,
 } from './inventory-sync';
+import type { BookmarkDocument } from '../core/bookmarks';
+import { saveBookmarksBaseline } from './bookmarks';
+import {
+  bookmarksSibling,
+  readBookmarkDocument,
+  writeBookmarkDocument,
+} from './bookmarks-sync';
 
 async function configuredBackend(): Promise<GitHubBackend> {
   const config = await loadGitHubConfig();
@@ -109,4 +118,36 @@ export async function upgradeGitHubInventory(): Promise<UpgradeInventoryResult> 
     inventory: projectForDevice(result.document, device),
     upgraded: result.upgraded,
   };
+}
+
+
+// Bookmark backups live beside the inventory, in a sibling file derived from
+// the configured path, so one connection covers both.
+async function bookmarksBackend(): Promise<GitHubBackend> {
+  const config = await loadGitHubConfig();
+  if (!config) throw new BackendError('invalid_config', 'Configure GitHub first.');
+  return new GitHubBackend({ ...config, filePath: bookmarksSibling(config.filePath) });
+}
+
+export async function pullGitHubBookmarks(): Promise<BookmarkDocument> {
+  const remote = await readBookmarkDocument(await bookmarksBackend());
+  if (!remote) {
+    throw new BackendError('not_found', 'No bookmark backup exists at this Git path yet.');
+  }
+  await saveBookmarksBaseline(remote.document);
+  await saveGitHubBookmarksVersion(remote.version);
+  return remote.document;
+}
+
+export async function backUpGitHubBookmarks(
+  document: BookmarkDocument,
+): Promise<BookmarkDocument> {
+  const backend = await bookmarksBackend();
+  const result = await writeBookmarkDocument({
+    backend,
+    document,
+    expectedVersion: await loadGitHubBookmarksVersion(),
+  });
+  await saveGitHubBookmarksVersion(result.version);
+  return document;
 }

@@ -56,3 +56,16 @@ export async function loadWebDavRemoteVersion(): Promise<string | null> {
     ? stored[REMOTE_VERSION_KEY]
     : null;
 }
+
+const BOOKMARKS_VERSION_webdavBookmarksVersion = 'webdavBookmarksVersion';
+
+export async function saveWebDavBookmarksVersion(version: string): Promise<void> {
+  await browser.storage.local.set({ [BOOKMARKS_VERSION_webdavBookmarksVersion]: version });
+}
+
+export async function loadWebDavBookmarksVersion(): Promise<string | null> {
+  const stored = await browser.storage.local.get(BOOKMARKS_VERSION_webdavBookmarksVersion);
+  return typeof stored[BOOKMARKS_VERSION_webdavBookmarksVersion] === 'string'
+    ? stored[BOOKMARKS_VERSION_webdavBookmarksVersion]
+    : null;
+}

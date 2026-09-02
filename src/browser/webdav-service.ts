@@ -14,10 +14,19 @@ import {
   syncV2,
   upgradeRemoteToV2,
 } from './inventory-sync';
+import type { BookmarkDocument } from '../core/bookmarks';
+import { saveBookmarksBaseline } from './bookmarks';
+import {
+  bookmarksSibling,
+  readBookmarkDocument,
+  writeBookmarkDocument,
+} from './bookmarks-sync';
 import {
   loadWebDavConfig,
   saveWebDavConfig,
   saveWebDavRemoteVersion,
+  loadWebDavBookmarksVersion,
+  saveWebDavBookmarksVersion,
 } from './webdav-store';
 
 async function configuredBackend(): Promise<WebDavBackend> {
@@ -109,4 +118,36 @@ export async function upgradeWebDavInventory(): Promise<UpgradeInventoryResult> 
     inventory: projectForDevice(result.document, device),
     upgraded: result.upgraded,
   };
+}
+
+
+// Bookmark backups live beside the inventory, in a sibling file derived from
+// the configured path, so one connection covers both.
+async function bookmarksBackend(): Promise<WebDavBackend> {
+  const config = await loadWebDavConfig();
+  if (!config) throw new BackendError('invalid_config', 'Configure WebDAV first.');
+  return new WebDavBackend({ ...config, fileName: bookmarksSibling(config.fileName) });
+}
+
+export async function pullWebDavBookmarks(): Promise<BookmarkDocument> {
+  const remote = await readBookmarkDocument(await bookmarksBackend());
+  if (!remote) {
+    throw new BackendError('not_found', 'No bookmark backup exists at this WebDAV location yet.');
+  }
+  await saveBookmarksBaseline(remote.document);
+  await saveWebDavBookmarksVersion(remote.version);
+  return remote.document;
+}
+
+export async function backUpWebDavBookmarks(
+  document: BookmarkDocument,
+): Promise<BookmarkDocument> {
+  const backend = await bookmarksBackend();
+  const result = await writeBookmarkDocument({
+    backend,
+    document,
+    expectedVersion: await loadWebDavBookmarksVersion(),
+  });
+  await saveWebDavBookmarksVersion(result.version);
+  return document;
 }

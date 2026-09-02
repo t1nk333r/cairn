@@ -44,3 +44,16 @@ export async function loadGitHubRemoteVersion(): Promise<string | null> {
   const stored = await browser.storage.local.get(REMOTE_VERSION_KEY);
   return typeof stored[REMOTE_VERSION_KEY] === 'string' ? stored[REMOTE_VERSION_KEY] : null;
 }
+
+const BOOKMARKS_VERSION_githubBookmarksVersion = 'githubBookmarksVersion';
+
+export async function saveGitHubBookmarksVersion(version: string): Promise<void> {
+  await browser.storage.local.set({ [BOOKMARKS_VERSION_githubBookmarksVersion]: version });
+}
+
+export async function loadGitHubBookmarksVersion(): Promise<string | null> {
+  const stored = await browser.storage.local.get(BOOKMARKS_VERSION_githubBookmarksVersion);
+  return typeof stored[BOOKMARKS_VERSION_githubBookmarksVersion] === 'string'
+    ? stored[BOOKMARKS_VERSION_githubBookmarksVersion]
+    : null;
+}

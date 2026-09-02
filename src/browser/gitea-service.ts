@@ -12,6 +12,8 @@ import {
   loadGiteaConfig,
   saveGiteaConfig,
   saveGiteaRemoteVersion,
+  loadGiteaBookmarksVersion,
+  saveGiteaBookmarksVersion,
 } from './gitea-store';
 import { loadInventory, saveComparisonBaseline } from './inventory-store';
 import {
@@ -19,6 +21,13 @@ import {
   syncV2,
   upgradeRemoteToV2,
 } from './inventory-sync';
+import type { BookmarkDocument } from '../core/bookmarks';
+import { saveBookmarksBaseline } from './bookmarks';
+import {
+  bookmarksSibling,
+  readBookmarkDocument,
+  writeBookmarkDocument,
+} from './bookmarks-sync';
 
 async function configuredBackend(): Promise<GiteaBackend> {
   const config = await loadGiteaConfig();
@@ -109,4 +118,36 @@ export async function upgradeGiteaInventory(): Promise<UpgradeInventoryResult> {
     inventory: projectForDevice(result.document, device),
     upgraded: result.upgraded,
   };
+}
+
+
+// Bookmark backups live beside the inventory, in a sibling file derived from
+// the configured path, so one connection covers both.
+async function bookmarksBackend(): Promise<GiteaBackend> {
+  const config = await loadGiteaConfig();
+  if (!config) throw new BackendError('invalid_config', 'Configure Gitea first.');
+  return new GiteaBackend({ ...config, filePath: bookmarksSibling(config.filePath) });
+}
+
+export async function pullGiteaBookmarks(): Promise<BookmarkDocument> {
+  const remote = await readBookmarkDocument(await bookmarksBackend());
+  if (!remote) {
+    throw new BackendError('not_found', 'No bookmark backup exists at this repository path yet.');
+  }
+  await saveBookmarksBaseline(remote.document);
+  await saveGiteaBookmarksVersion(remote.version);
+  return remote.document;
+}
+
+export async function backUpGiteaBookmarks(
+  document: BookmarkDocument,
+): Promise<BookmarkDocument> {
+  const backend = await bookmarksBackend();
+  const result = await writeBookmarkDocument({
+    backend,
+    document,
+    expectedVersion: await loadGiteaBookmarksVersion(),
+  });
+  await saveGiteaBookmarksVersion(result.version);
+  return document;
 }

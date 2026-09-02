@@ -83,3 +83,15 @@ export async function loadS3RemoteVersion(): Promise<string | null> {
     : null;
 }
 
+const BOOKMARKS_VERSION_s3BookmarksVersion = 's3BookmarksVersion';
+
+export async function saveS3BookmarksVersion(version: string): Promise<void> {
+  await browser.storage.local.set({ [BOOKMARKS_VERSION_s3BookmarksVersion]: version });
+}
+
+export async function loadS3BookmarksVersion(): Promise<string | null> {
+  const stored = await browser.storage.local.get(BOOKMARKS_VERSION_s3BookmarksVersion);
+  return typeof stored[BOOKMARKS_VERSION_s3BookmarksVersion] === 'string'
+    ? stored[BOOKMARKS_VERSION_s3BookmarksVersion]
+    : null;
+}

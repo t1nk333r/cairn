@@ -51,3 +51,15 @@ export async function loadGiteaRemoteVersion(): Promise<string | null> {
     : null;
 }
 
+const BOOKMARKS_VERSION_giteaBookmarksVersion = 'giteaBookmarksVersion';
+
+export async function saveGiteaBookmarksVersion(version: string): Promise<void> {
+  await browser.storage.local.set({ [BOOKMARKS_VERSION_giteaBookmarksVersion]: version });
+}
+
+export async function loadGiteaBookmarksVersion(): Promise<string | null> {
+  const stored = await browser.storage.local.get(BOOKMARKS_VERSION_giteaBookmarksVersion);
+  return typeof stored[BOOKMARKS_VERSION_giteaBookmarksVersion] === 'string'
+    ? stored[BOOKMARKS_VERSION_giteaBookmarksVersion]
+    : null;
+}

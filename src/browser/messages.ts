@@ -1,3 +1,5 @@
+import type { BookmarkDocument } from '../core/bookmarks';
+import type { RestoreSummary } from './bookmarks';
 import type { InventoryDocument } from '../core/inventory';
 import type { StoredWebDavConfig } from './webdav-store';
 import type { StoredS3Config } from './s3-store';
@@ -44,10 +46,23 @@ export type HsyncRequest =
   | { type: 'github:get-config' }
   | { type: 'github:pull' }
   | { type: 'github:upload' }
-  | { type: 'github:upgrade' };
+  | { type: 'github:upgrade' }
+  | { type: 'bookmarks:capture' }
+  | { type: 'bookmarks:get' }
+  | { type: 'bookmarks:restore' }
+  | { type: 'webdav:bookmarks-pull' }
+  | { type: 'webdav:bookmarks-backup' }
+  | { type: 's3:bookmarks-pull' }
+  | { type: 's3:bookmarks-backup' }
+  | { type: 'gitea:bookmarks-pull' }
+  | { type: 'gitea:bookmarks-backup' }
+  | { type: 'github:bookmarks-pull' }
+  | { type: 'github:bookmarks-backup' };
 
 export type HsyncResponse =
   | { ok: true; inventory: InventoryDocument | null }
+  | { ok: true; bookmarks: BookmarkDocument | null }
+  | { ok: true; restore: RestoreSummary }
   | { ok: true; inventory: InventoryDocument; upgraded: boolean }
   | { ok: true; webdavConfig: StoredWebDavConfig | null }
   | { ok: true; s3Config: StoredS3Config | null }

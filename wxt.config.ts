@@ -8,7 +8,7 @@ export default defineConfig({
     name: 'hsync',
     description: 'Sync your browser extension inventory using storage you control.',
     version: '0.1.0',
-    permissions: ['management', 'storage', 'alarms'],
+    permissions: ['management', 'storage', 'alarms', 'bookmarks'],
     action: {
       default_title: 'hsync',
     },

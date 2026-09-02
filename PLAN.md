@@ -11,10 +11,38 @@ The first stable release will provide:
 5. Manual and scheduled backup.
 6. Git, Gitea, WebDAV, and S3-compatible storage.
 7. Optional client-side encryption before data leaves the browser.
+8. Bookmark backup, sync, and additive restore.
 
-Bookmarks, passwords, history, tabs, and extension-owned settings are outside
-the initial scope. This keeps hsync independent of browser account sync and
-avoids collecting unrelated sensitive data.
+Passwords, history, tabs, and extension-owned settings remain outside scope.
+That boundary exists to keep this independent of browser account sync and to
+avoid collecting unrelated sensitive data.
+
+**Bookmarks were added to the contract on 2026-09-02**, having previously been
+excluded on the same reasoning. The distinction: bookmarks are user-authored
+content the user already expects to export, they are readable through a single
+declared permission, and they carry no credentials. The exclusion of passwords
+and history is not weakened by including them.
+
+### Bookmark backup
+
+The bookmark tree is captured into its own document, stored beside the
+inventory in a derived sibling path (`hsync.json` → `hsync-bookmarks.json`), so
+one configured connection covers both without a second set of settings.
+
+Browser-local node ids and sibling indexes are dropped at capture; they differ
+per device and change on every reorder, which would make each backup a
+whole-file diff in the Git-backed backends. Order is preserved positionally.
+
+Unlike the extension inventory, bookmark documents are **not merged** across
+devices. A three-way merge of two divergent trees needs move, rename, and
+duplicate semantics that are not specified, and silently mangling bookmarks is
+worse than refusing. A backup is a whole-document write guarded by the
+backend's version token: a concurrent write fails and the user pulls first.
+
+Restore is **additive**. It recreates the backup inside a new dated folder and
+never moves, renames, or deletes anything that already exists, so it cannot
+destroy data and needs no undo. Entries the browser refuses (bookmarklets,
+unsupported schemes) are counted and reported rather than aborting the restore.
 
 ## Browser reality
 
