@@ -295,8 +295,8 @@ timeout, retry, encryption, and secret-redaction behavior.
 
 These do not block implementation of the core:
 
-1. Confirm the final license (AGPL-3.0-or-later is recommended for a tool aimed
-   at self-hosting; MPL-2.0 is the less restrictive alternative).
+1. ~~Confirm the final license.~~ **Decided 2026-09-02: AGPL-3.0-or-later**,
+   for a tool aimed at self-hosting. Declared in `package.json` and `README.md`.
 2. Select the first API-backed generic Git host in addition to Gitea.
 3. Decide whether encrypted inventories are opt-in or the default for new
    configurations.

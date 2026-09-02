@@ -93,6 +93,11 @@ npm run dev:firefox
 
 ## License
 
-Planned: AGPL-3.0-or-later for original hsync code. Any reused Bookmarkora code
-will retain its MIT copyright and license notice. License files and a
-third-party notice will be added with the initial implementation scaffold.
+hsync is licensed under the GNU Affero General Public License, version 3 or
+later (`AGPL-3.0-or-later`). See `LICENSE` for the full text.
+
+AGPL was chosen because hsync is aimed at self-hosting: it keeps the source
+available to anyone who runs a modified version as a network service.
+
+Any reused Bookmarkora code retains its MIT copyright and license notice; see
+`THIRD_PARTY_NOTICES.md`.
