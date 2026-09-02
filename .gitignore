@@ -11,3 +11,7 @@ coverage/
 
 # agent worktrees
 .claude/worktrees/
+
+# advisor audit trail and handoff notes, kept local
+plans/
+HANDOFF.md
