@@ -19,7 +19,7 @@ const encoder = new TextEncoder();
 /**
  * Derives the bookmark document's remote name from the inventory's, so one
  * configured connection covers both without a second set of settings fields.
- * `devices/hsync.json` becomes `devices/hsync-bookmarks.json`.
+ * `devices/cairn.json` becomes `devices/cairn-bookmarks.json`.
  */
 export function bookmarksSibling(path: string): string {
   const slash = path.lastIndexOf('/');

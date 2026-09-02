@@ -13,7 +13,7 @@ throughout this document live in
 
 ## 1. Problem
 
-hsync's stated purpose is comparing and restoring browser extensions across
+Cairn's stated purpose is comparing and restoring browser extensions across
 multiple devices. The shipped v1 document cannot represent more than one
 device at a time:
 
@@ -471,7 +471,7 @@ document (or a v2-native device) is merged in.
    remote afterward, `parseInventoryJson` (still v1-only on that device)
    throws `unsupported_schema`, surfaced in the UI as "This inventory was
    upgraded to multi-device format on another device — install the latest
-   version of hsync on this device to continue syncing," not a generic
+   version of Cairn on this device to continue syncing," not a generic
    parse error. That copy change is new UI string work, not a schema
    change.
 4. No downgrade path is provided. Writing v2 content back down to v1 shape

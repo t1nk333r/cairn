@@ -11,14 +11,14 @@ import type { HsyncRequest } from '../src/browser/messages';
 
 const savedConfigs: Record<string, Record<string, unknown>> = {
   'webdav:get-config': {
-    webdavConfig: { baseUrl: 'https://dav.example.test/', fileName: 'hsync.json', username: 'alice' },
+    webdavConfig: { baseUrl: 'https://dav.example.test/', fileName: 'cairn.json', username: 'alice' },
   },
   's3:get-config': {
     s3Config: {
       endpoint: 'https://s3.example.test',
       region: 'us-east-1',
       bucket: 'inventories',
-      objectKey: 'hsync.json',
+      objectKey: 'cairn.json',
       accessKeyId: 'AKIAEXAMPLE',
       forcePathStyle: true,
       hasSessionToken: false,
@@ -30,7 +30,7 @@ const savedConfigs: Record<string, Record<string, unknown>> = {
       owner: 'alice',
       repo: 'sync',
       branch: 'main',
-      filePath: 'hsync.json',
+      filePath: 'cairn.json',
     },
   },
   'github:get-config': {
@@ -39,7 +39,7 @@ const savedConfigs: Record<string, Record<string, unknown>> = {
       owner: 'alice',
       repo: 'sync',
       branch: 'main',
-      filePath: 'hsync.json',
+      filePath: 'cairn.json',
     },
   },
 };

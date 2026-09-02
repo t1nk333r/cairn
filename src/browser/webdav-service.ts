@@ -65,7 +65,7 @@ export async function pullWebDavInventory() {
   const backend = await configuredBackend();
   const shape = await readRemoteDocument(backend);
   if (shape.kind === 'absent') {
-    throw new BackendError('not_found', 'No hsync inventory exists at this WebDAV location yet.');
+    throw new BackendError('not_found', 'No Cairn inventory exists at this WebDAV location yet.');
   }
   // A v1 remote is still legitimate until the user runs the upgrade action;
   // keep today's behavior exactly so single-device users keep working.

@@ -16,7 +16,7 @@ const device: DeviceObservation = {
 
 const self: ManagementExtensionInfo = {
   id: 'hsync-id',
-  name: 'hsync',
+  name: 'Cairn',
   version: '0.1.0',
   enabled: true,
   type: 'extension',

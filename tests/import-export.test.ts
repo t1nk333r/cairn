@@ -52,7 +52,7 @@ describe('inventory import and export', () => {
   it('rejects structurally invalid inventory documents', () => {
     expect(() =>
       parseInventoryJson(JSON.stringify({ ...validInventory, extensions: [{}] })),
-    ).toThrow('not a valid hsync inventory');
+    ).toThrow('not a valid Cairn inventory');
   });
 });
 

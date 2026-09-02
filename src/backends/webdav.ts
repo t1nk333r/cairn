@@ -19,7 +19,7 @@ export interface WebDavBackendOptions {
 
 export function normalizeWebDavConfig(config: WebDavConfig): WebDavConfig {
   const baseUrl = config.baseUrl.trim();
-  const fileName = config.fileName.trim() || 'hsync.json';
+  const fileName = config.fileName.trim() || 'cairn.json';
   const username = config.username.trim();
   let parsed: URL;
   try {

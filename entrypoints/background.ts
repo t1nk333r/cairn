@@ -73,7 +73,7 @@ function scheduleCapture() {
     captureInFlight = captureInFlight
       .then(() => captureAndSave())
       .catch((error: unknown) => {
-        console.error('hsync: inventory capture failed', error);
+        console.error('cairn: inventory capture failed', error);
       });
   }, CAPTURE_DEBOUNCE_MS);
 }

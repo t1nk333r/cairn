@@ -218,7 +218,7 @@ describe('inventory characterization: known-permissive validation gaps', () => {
 describe('inventory characterization: captureInventory self-exclusion', () => {
   const self: ManagementExtensionInfo = {
     id: 'hsync-self-id',
-    name: 'hsync',
+    name: 'Cairn',
     version: '0.1.0',
     enabled: true,
     type: 'extension',

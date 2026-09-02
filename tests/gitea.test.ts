@@ -7,7 +7,7 @@ const config = {
   owner: 'alice',
   repo: 'browser-sync',
   branch: 'main',
-  filePath: 'devices/hsync.json',
+  filePath: 'devices/cairn.json',
 };
 
 describe('Gitea configuration', () => {
@@ -75,7 +75,7 @@ describe('GiteaBackend', () => {
     expect(new TextDecoder().decode(result?.data)).toBe('{"schemaVersion":1}');
     expect(result?.version).toBe('blob-v1');
     expect(fetcher.mock.calls[0]?.[0]).toBe(
-      'https://git.example.test/gitea/api/v1/repos/alice/browser-sync/contents/devices/hsync.json?ref=main',
+      'https://git.example.test/gitea/api/v1/repos/alice/browser-sync/contents/devices/cairn.json?ref=main',
     );
   });
 
@@ -93,7 +93,7 @@ describe('GiteaBackend', () => {
     const body = JSON.parse(String(request?.body)) as Record<string, unknown>;
     expect(request?.method).toBe('POST');
     expect(body).not.toHaveProperty('sha');
-    expect(body).toMatchObject({ branch: 'main', message: 'sync: update devices/hsync.json' });
+    expect(body).toMatchObject({ branch: 'main', message: 'sync: update devices/cairn.json' });
   });
 
   it('updates with PUT and the expected blob SHA', async () => {
@@ -354,7 +354,7 @@ describe('Gitea service (v2 sync path)', () => {
   it('pull against an absent remote keeps its not_found wording', async () => {
     await expect(pullGiteaInventory()).rejects.toMatchObject({
       code: 'not_found',
-      message: 'No hsync inventory exists at this repository path yet.',
+      message: 'No Cairn inventory exists at this repository path yet.',
     });
   });
 

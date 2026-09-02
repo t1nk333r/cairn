@@ -2,17 +2,17 @@
 
 ## Why this is the reference
 
-Bookmarkora already validates the product shape hsync needs: one cross-browser
+Bookmarkora already validates the product shape Cairn needs: one cross-browser
 extension, user-owned storage, Git-host APIs, Gitea, WebDAV, S3-compatible
 storage, multiple push targets, scheduled sync, merge, snapshots, and optional
 end-to-end encryption.
 
-Bookmarkora is MIT-licensed. hsync may reuse its code if the copyright and MIT
+Bookmarkora is MIT-licensed. Cairn may reuse its code if the copyright and MIT
 license notice travel with copied portions. Product ideas and architecture will
 be adapted openly and credited even where the implementation is new.
 
 The public repository currently exposes packaged extension bundles rather than
-an obvious unbundled source tree. Therefore hsync will not paste minified code.
+an obvious unbundled source tree. Therefore Cairn will not paste minified code.
 We will implement readable TypeScript from the observable interfaces and only
 copy a specific routine if its provenance and license header can be preserved.
 
@@ -50,9 +50,9 @@ Notable patterns:
 - Internationalization through `_locales`.
 - Dynamic chunks for less-common providers.
 
-## Direct mapping to hsync
+## Direct mapping to Cairn
 
-| Bookmarkora concept | hsync adaptation |
+| Bookmarkora concept | Cairn adaptation |
 |---|---|
 | Bookmark tree adapter | Normalized extension inventory adapter |
 | Chrome/Firefox root differences | Chrome/Firefox extension-ID aliases |
@@ -60,7 +60,7 @@ Notable patterns:
 | Sync bookmarks | Sync extension inventory |
 | Upload | Publish this device's latest observation |
 | Download | Pull remote state without installing silently |
-| Clear local | Not offered; hsync must not bulk-uninstall extensions |
+| Clear local | Not offered; Cairn must not bulk-uninstall extensions |
 | Clear remote | Archive then reset remote inventory |
 | Bookmark snapshots | Inventory snapshots and backend version history |
 | Broken-link/duplicate tools | Unmatched identity, stale source, and duplicate alias tools |
@@ -74,13 +74,13 @@ Notable patterns:
 ## UI design to adopt
 
 Bookmarkora uses a compact, native-feeling popup and a larger settings surface.
-hsync will preserve that hierarchy:
+Cairn will preserve that hierarchy:
 
 ### Popup
 
 ```text
 ┌────────────────────────────────────┐
-│ hsync                    ⚙   ↗     │
+│ Cairn                    ⚙   ↗     │
 │                                    │
 │ ● Synced 2 min ago                 │
 │ 17 here  ·  19 remote  ·  2 missing│
@@ -99,7 +99,7 @@ plain language. A setup card replaces the controls until a connection passes.
 
 ```text
 ┌──────────────┬─────────────────────────────────────┐
-│ hsync        │ Overview                            │
+│ Cairn        │ Overview                            │
 │              │                                     │
 │ Overview     │ [health] [local] [remote] [missing] │
 │ Extensions   │                                     │
@@ -113,10 +113,10 @@ plain language. A setup card replaces the controls until a connection passes.
 Use the same general visual language visible in Bookmarkora's bundle: system
 fonts, restrained gray surfaces, 8–12 px radii, pill-shaped status badges,
 green success, amber warning, red danger, light/dark color-scheme support, and
-brand icons only where they speed provider recognition. hsync will use its own
+brand icons only where they speed provider recognition. Cairn will use its own
 name, icon, copy, spacing scale, and color tokens rather than cloning branding.
 
-## Internal hsync architecture
+## Internal Cairn architecture
 
 Bookmarkora's observable coordinator/provider shape becomes explicit packages:
 
@@ -149,7 +149,7 @@ contract test suite.
 ## Configuration model
 
 Bookmarkora's single default-filled settings object is convenient but grows
-wide as providers multiply. hsync will use discriminated records:
+wide as providers multiply. Cairn will use discriminated records:
 
 ```ts
 type Connection =
@@ -173,31 +173,31 @@ credentials backup.
 ### Secrets
 
 The inspected Bookmarkora bundle stores its compressed settings model in
-browser sync storage, and that model includes provider credentials. hsync will
+browser sync storage, and that model includes provider credentials. Cairn will
 store credentials only in local storage, separated from syncable preferences.
 
 ### Host permissions
 
 Bookmarkora declares broad optional `*://*/*` access to support arbitrary
-self-hosted services. hsync will request the narrow origin pattern for the
+self-hosted services. Cairn will request the narrow origin pattern for the
 configured endpoint at connection-test time and show which origin is being
 granted.
 
 ### Concurrency
 
-Every hsync backend exposes a version token and conditional write. Provider
+Every Cairn backend exposes a version token and conditional write. Provider
 fan-out records individual outcomes, and mirrors cannot silently replace the
 authoritative primary state.
 
 ### Domain safety
 
-Bookmark deletion maps poorly to extension management. hsync will not expose a
+Bookmark deletion maps poorly to extension management. Cairn will not expose a
 bulk “clear local” action and will never convert remote absence directly into
 local uninstallation. Removal is represented as a reviewable tombstone.
 
 ### Maintainability
 
-The hsync repository will contain readable source, unit tests, backend contract
+The Cairn repository will contain readable source, unit tests, backend contract
 tests, migration fixtures, reproducible builds, and a generated third-party
 notice. Release archives will not be the only inspectable implementation.
 

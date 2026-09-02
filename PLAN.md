@@ -1,4 +1,4 @@
-# hsync implementation plan
+# Cairn implementation plan
 
 ## Product contract
 
@@ -26,7 +26,7 @@ and history is not weakened by including them.
 ### Bookmark backup
 
 The bookmark tree is captured into its own document, stored beside the
-inventory in a derived sibling path (`hsync.json` → `hsync-bookmarks.json`), so
+inventory in a derived sibling path (`cairn.json` → `cairn-bookmarks.json`), so
 one configured connection covers both without a second set of settings.
 
 Browser-local node ids and sibling indexes are dropped at capture; they differ
@@ -50,7 +50,7 @@ Both browser families expose an extension-management inventory API. Their IDs
 are not portable: a Firefox add-on ID may differ from its Chromium Web Store
 ID, and some add-ons exist in only one ecosystem.
 
-Neither browser lets hsync silently install arbitrary ordinary extensions.
+Neither browser lets Cairn silently install arbitrary ordinary extensions.
 Restore is therefore explicit:
 
 1. Identify a missing extension using a known browser-specific ID or alias.
@@ -136,7 +136,7 @@ Portable identity resolution is conservative:
 3. A unique canonical project/store URL may be proposed as a match.
 4. Name-only matches are suggestions and are never merged automatically.
 
-hsync excludes itself from the inventory and records only metadata required to
+Cairn excludes itself from the inventory and records only metadata required to
 compare and restore. Permissions and descriptions may be displayed locally but
 will not be uploaded by default.
 
@@ -217,7 +217,7 @@ No network request occurs until the user configures and tests a backend.
 
 ## UI
 
-Following Bookmarkora's useful split, hsync has a compact action popup and a
+Following Bookmarkora's useful split, Cairn has a compact action popup and a
 full-page control center. The popup is intentionally operational rather than a
 miniature settings page.
 
@@ -282,7 +282,7 @@ target S3-compatible service without losing concurrent changes.
   reason.
 
 Exit condition: every inventory change is auditable as a commit and concurrent
-writes produce a reviewable merge instead of overwrite. hsync now supports
+writes produce a reviewable merge instead of overwrite. Cairn now supports
 Git only through repository-host APIs (Gitea, GitHub); arbitrary Git remotes
 and the native companion that would have carried them are not part of the
 product — see `HELIUM_SYNC_GIT_ADAPTATION.md`.
@@ -296,7 +296,7 @@ product — see `HELIUM_SYNC_GIT_ADAPTATION.md`.
   accessibility checks, and store submission assets.
 
 Exit condition: a clean Chromium/Helium or Firefox profile can work through a
-remote inventory without hsync claiming or attempting silent installation.
+remote inventory without Cairn claiming or attempting silent installation.
 
 ## Test matrix
 

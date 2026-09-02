@@ -215,8 +215,8 @@ describe('restoreBookmarks', () => {
 
 describe('bookmarksSibling', () => {
   it('derives a sibling name beside the inventory document', () => {
-    expect(bookmarksSibling('hsync.json')).toBe('hsync-bookmarks.json');
-    expect(bookmarksSibling('devices/hsync.json')).toBe('devices/hsync-bookmarks.json');
+    expect(bookmarksSibling('cairn.json')).toBe('cairn-bookmarks.json');
+    expect(bookmarksSibling('devices/cairn.json')).toBe('devices/cairn-bookmarks.json');
     expect(bookmarksSibling('a/b/c/inventory.json')).toBe('a/b/c/inventory-bookmarks.json');
   });
 
@@ -226,11 +226,11 @@ describe('bookmarksSibling', () => {
   });
 
   it('leaves a dotfile intact rather than splitting on its leading dot', () => {
-    expect(bookmarksSibling('.hsync')).toBe('.hsync-bookmarks');
+    expect(bookmarksSibling('.cairn')).toBe('.cairn-bookmarks');
   });
 
   it('never escapes the configured directory', () => {
-    for (const input of ['hsync.json', 'devices/hsync.json', '.hsync']) {
+    for (const input of ['cairn.json', 'devices/cairn.json', '.cairn']) {
       expect(bookmarksSibling(input)).not.toContain('..');
     }
   });

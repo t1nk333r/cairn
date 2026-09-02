@@ -29,13 +29,13 @@ function downloadInventory(inventory: InventoryDocument) {
   const anchor = document.createElement('a');
   const device = inventory.device.label.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-');
   anchor.href = url;
-  anchor.download = `hsync-${device || 'inventory'}.json`;
+  anchor.download = `cairn-${device || 'inventory'}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
 
 const UPGRADE_CONFIRM_MESSAGE =
-  'Convert this remote inventory to the multi-device format? The conversion cannot be undone, and every other device syncing with this remote will need an up-to-date version of hsync to keep reading it.';
+  'Convert this remote inventory to the multi-device format? The conversion cannot be undone, and every other device syncing with this remote will need an up-to-date version of Cairn to keep reading it.';
 
 const RESTORE_CONFIRM_MESSAGE =
   'Restore this bookmark backup? Everything is recreated inside a new, dated folder under Other bookmarks. Nothing you already have is changed, moved, or deleted \u2014 delete that folder if you change your mind.';
@@ -77,7 +77,7 @@ export function App() {
   const [githubSaved, setGitHubSaved] = useState(false);
   const [webdav, setWebdav] = useState({
     baseUrl: '',
-    fileName: 'hsync.json',
+    fileName: 'cairn.json',
     username: '',
     password: '',
   });
@@ -85,7 +85,7 @@ export function App() {
     endpoint: 'https://s3.amazonaws.com',
     region: 'us-east-1',
     bucket: '',
-    objectKey: 'hsync.json',
+    objectKey: 'cairn.json',
     forcePathStyle: false,
     accessKeyId: '',
     secretAccessKey: '',
@@ -97,7 +97,7 @@ export function App() {
     owner: '',
     repo: '',
     branch: 'main',
-    filePath: 'hsync.json',
+    filePath: 'cairn.json',
   });
   const [github, setGitHub] = useState({
     apiUrl: 'https://api.github.com',
@@ -105,7 +105,7 @@ export function App() {
     owner: '',
     repo: '',
     branch: 'main',
-    filePath: 'hsync.json',
+    filePath: 'cairn.json',
   });
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -505,7 +505,7 @@ export function App() {
   return (
     <div className="app-shell">
       <aside>
-        <div className="wordmark"><span>h</span><strong>hsync</strong></div>
+        <div className="wordmark"><span>c</span><strong>Cairn</strong></div>
         <nav aria-label="Control center">
           {NAV_SECTIONS.map((section) => (
             <a
@@ -557,7 +557,7 @@ export function App() {
               ))}
             </div>
           ) : (
-            <div className="empty-state"><strong>{inventory ? 'No matching extensions' : 'Capture your first inventory'}</strong><p>hsync excludes itself and records ordinary extensions only.</p></div>
+            <div className="empty-state"><strong>{inventory ? 'No matching extensions' : 'Capture your first inventory'}</strong><p>Cairn excludes itself and records ordinary extensions only.</p></div>
           )}
         </section>
 
@@ -565,7 +565,7 @@ export function App() {
           <div className="section-heading">
             <div>
               <h2>Compare inventories</h2>
-              <p>{baseline ? `${baseline.device.label} · captured ${new Date(baseline.generatedAt).toLocaleString()}` : 'Import an hsync JSON inventory from another browser or device.'}</p>
+              <p>{baseline ? `${baseline.device.label} · captured ${new Date(baseline.generatedAt).toLocaleString()}` : 'Import a Cairn JSON inventory from another browser or device.'}</p>
             </div>
             <div className="compare-actions">
               <input
@@ -906,7 +906,7 @@ export function App() {
               <span>Folder URL</span>
               <input
                 type="url"
-                placeholder="https://cloud.example.com/remote.php/dav/files/user/hsync/"
+                placeholder="https://cloud.example.com/remote.php/dav/files/user/cairn/"
                 value={webdav.baseUrl}
                 onChange={(event) => {
                   setWebdavSaved(false);
@@ -1015,7 +1015,7 @@ export function App() {
             <label className="wide-field">
               <span>Object key</span>
               <input
-                placeholder="hsync.json"
+                placeholder="cairn.json"
                 value={s3.objectKey}
                 onChange={(event) => {
                   setS3Saved(false);

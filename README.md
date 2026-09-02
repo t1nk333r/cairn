@@ -1,6 +1,10 @@
-# hsync
+# Cairn
 
-`hsync` is a FOSS browser-extension inventory synchronizer for Chromium-family
+*Formerly `hsync`. A cairn is a stack of stones you build yourself to mark a
+trail, so you can find your way back — which is what this does for a browser
+setup.*
+
+Cairn is a FOSS browser-extension and bookmark synchronizer for Chromium-family
 browsers (including Helium) and Firefox.
 
 ## Current status
@@ -10,7 +14,7 @@ Milestone 1 is underway. The repository currently includes:
 - Chromium/Helium and Firefox Manifest V3 builds from one WXT codebase;
 - normalized extension inventory capture through the management API;
 - automatic recapture on install, uninstall, enable, and disable events;
-- local inventory persistence with hsync self-exclusion;
+- local inventory persistence with Cairn self-exclusion;
 - a full-page inventory control center, opened in its own tab from the
   toolbar icon;
 - validated local JSON export/import using a separate comparison baseline;
@@ -46,7 +50,7 @@ The project intentionally does not claim to silently install extensions.
 Browser security APIs do not allow an extension to silently install arbitrary
 ordinary extensions.
 
-Guided restore is **not implemented yet**. Today hsync captures, compares, and
+Guided restore is **not implemented yet**. Today Cairn captures, compares, and
 syncs inventories; the Compare view links out to an extension's store or
 project page, but nothing detects installation or reconciles enabled/disabled
 state afterwards. See [PLAN.md](PLAN.md) Milestone 4 for the intended design.
@@ -101,10 +105,10 @@ npm run dev:firefox
 
 ## License
 
-hsync is licensed under the GNU Affero General Public License, version 3 or
+Cairn is licensed under the GNU Affero General Public License, version 3 or
 later (`AGPL-3.0-or-later`). The full text is in [`LICENSE`](LICENSE).
 
-AGPL was chosen because hsync is aimed at self-hosting: it keeps the source
+AGPL was chosen because Cairn is aimed at self-hosting: it keeps the source
 available to anyone who runs a modified version as a network service.
 
 Any reused Bookmarkora code retains its MIT copyright and license notice; see

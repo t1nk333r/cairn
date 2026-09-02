@@ -7,7 +7,7 @@ const config = {
   owner: 'alice',
   repo: 'browser-sync.git',
   branch: 'main',
-  filePath: 'devices/hsync.json',
+  filePath: 'devices/cairn.json',
 };
 
 describe('GitHub configuration', () => {
@@ -312,7 +312,7 @@ describe('GitHub service (v2 sync path)', () => {
   it('pull against an absent remote keeps its not_found wording', async () => {
     await expect(pullGitHubInventory()).rejects.toMatchObject({
       code: 'not_found',
-      message: 'No hsync inventory exists at this Git path yet.',
+      message: 'No Cairn inventory exists at this Git path yet.',
     });
   });
 

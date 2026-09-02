@@ -1,6 +1,6 @@
 # S3-compatible setup
 
-hsync supports AWS S3, Cloudflare R2, MinIO, RustFS, and compatible Signature
+Cairn supports AWS S3, Cloudflare R2, MinIO, RustFS, and compatible Signature
 Version 4 services.
 
 ## Required values
@@ -10,7 +10,7 @@ Version 4 services.
   endpoint.
 - **Region:** the signing region required by the service. AWS commonly uses the
   bucket region; many self-hosted services use `us-east-1`.
-- **Bucket** and **object key:** where `hsync.json` will be stored.
+- **Bucket** and **object key:** where `cairn.json` will be stored.
 - **Access key ID** and **secret access key:** use credentials restricted to the
   selected bucket and object prefix.
 - **Session token:** required only for temporary credentials.
@@ -35,7 +35,7 @@ x-amz-date
 x-amz-security-token
 ```
 
-It must expose `ETag` to the extension. hsync refuses synchronization when it
+It must expose `ETag` to the extension. Cairn refuses synchronization when it
 cannot read `ETag`, because safe conditional updates would otherwise be
 impossible.
 
@@ -47,6 +47,6 @@ inventory object or prefix. CORS is not an authorization mechanism.
 ## Conflict behavior
 
 The first upload uses `If-None-Match: *`, so it cannot overwrite an existing
-object. After a successful Pull or Upload, hsync records the returned ETag and
+object. After a successful Pull or Upload, Cairn records the returned ETag and
 uses `If-Match` for the next upload. HTTP 409 or 412 becomes a conflict and the
 user must Pull and compare before retrying.

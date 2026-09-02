@@ -1,6 +1,6 @@
 # GitHub repository setup
 
-hsync can store its inventory in GitHub or GitHub Enterprise through the
+Cairn can store its inventory in GitHub or GitHub Enterprise through the
 repository Contents API. Each upload creates an ordinary Git commit without
 requiring a native helper.
 
@@ -21,10 +21,10 @@ extension storage and is sent only to the configured API origin.
 
 Pull records the file's current Git blob SHA. The next commit supplies that SHA
 as its expected version. If the file changed on another device, GitHub rejects
-the stale update and hsync asks you to pull and compare first.
+the stale update and Cairn asks you to pull and compare first.
 
 GitHub branch protection still applies. A branch that forbids direct commits
 cannot be used until its repository rules permit this token to write there.
 
 Arbitrary Git remotes, SSH keys, and SSH agents are intentionally outside the
-browser API backend. Those will use the optional `hsyncd` native companion.
+browser API backend. Those will use the optional `the native companion` native companion.

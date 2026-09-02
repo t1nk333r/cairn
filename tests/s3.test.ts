@@ -6,7 +6,7 @@ const config = {
   endpoint: 'https://s3.example.test',
   region: 'us-east-1',
   bucket: 'hsync-bucket',
-  objectKey: 'profiles/default/hsync.json',
+  objectKey: 'profiles/default/cairn.json',
   forcePathStyle: true,
   accessKeyId: 'AKIDEXAMPLE',
   secretAccessKey: 'secret-example',
@@ -15,7 +15,7 @@ const config = {
 describe('S3 endpoint handling', () => {
   it('builds path-style URLs for self-hosted services', () => {
     expect(buildS3ObjectUrl(config).href).toBe(
-      'https://s3.example.test/hsync-bucket/profiles/default/hsync.json',
+      'https://s3.example.test/hsync-bucket/profiles/default/cairn.json',
     );
   });
 
@@ -23,7 +23,7 @@ describe('S3 endpoint handling', () => {
     expect(
       buildS3ObjectUrl({ ...config, forcePathStyle: false }).href,
     ).toBe(
-      'https://hsync-bucket.s3.example.test/profiles/default/hsync.json',
+      'https://hsync-bucket.s3.example.test/profiles/default/cairn.json',
     );
   });
 
@@ -58,7 +58,7 @@ describe('SigV4 signing', () => {
   it('produces stable signed headers and signs a session token', async () => {
     const headers = await signS3Request({
       method: 'PUT',
-      url: new URL('https://bucket.s3.us-east-1.amazonaws.com/hsync.json'),
+      url: new URL('https://bucket.s3.us-east-1.amazonaws.com/cairn.json'),
       region: 'us-east-1',
       credentials: {
         accessKeyId: 'AKIDEXAMPLE',
@@ -343,7 +343,7 @@ describe('S3 service (v2 sync path)', () => {
   it('pull against an absent remote keeps its not_found wording', async () => {
     await expect(pullS3Inventory()).rejects.toMatchObject({
       code: 'not_found',
-      message: 'No hsync inventory exists at this S3 object yet.',
+      message: 'No Cairn inventory exists at this S3 object yet.',
     });
   });
 

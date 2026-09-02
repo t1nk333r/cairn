@@ -17,7 +17,7 @@ const giteaConfig = {
   owner: 'alice',
   repo: 'browser-sync',
   branch: 'main',
-  filePath: 'devices/hsync.json',
+  filePath: 'devices/cairn.json',
 };
 
 const githubConfig = {
@@ -26,7 +26,7 @@ const githubConfig = {
   owner: 'alice',
   repo: 'browser-sync',
   branch: 'main',
-  filePath: 'devices/hsync.json',
+  filePath: 'devices/cairn.json',
 };
 
 const managementItem = (
@@ -149,8 +149,8 @@ describe('repository path and branch validation', () => {
     ['embedded traversal', 'devices/../../secrets.json'],
     ['git internals', '.git/config'],
     ['nested git internals', 'devices/.git/config'],
-    ['empty segment', 'devices//hsync.json'],
-    ['dot segment', 'devices/./hsync.json'],
+    ['empty segment', 'devices//cairn.json'],
+    ['dot segment', 'devices/./cairn.json'],
   ];
 
   for (const [label, filePath] of cases) {
@@ -164,8 +164,8 @@ describe('repository path and branch validation', () => {
   }
 
   it('still accepts an ordinary nested path', () => {
-    expect(normalizeGiteaConfig(giteaConfig).filePath).toBe('devices/hsync.json');
-    expect(normalizeGitHubConfig(githubConfig).filePath).toBe('devices/hsync.json');
+    expect(normalizeGiteaConfig(giteaConfig).filePath).toBe('devices/cairn.json');
+    expect(normalizeGitHubConfig(githubConfig).filePath).toBe('devices/cairn.json');
   });
 
   const badBranches = ['--upload-pack=evil', '../main', 'feature branch', 'main.lock', '/main', 'main/'];
@@ -213,7 +213,7 @@ describe('credentialed requests never follow redirects', () => {
     const { calls, fetcher } = capturingFetch();
     const config = normalizeWebDavConfig({
       baseUrl: 'https://dav.example.test/files/',
-      fileName: 'hsync.json',
+      fileName: 'cairn.json',
       username: 'alice',
       password: 'secret-value-not-asserted',
     });
@@ -229,7 +229,7 @@ describe('credentialed requests never follow redirects', () => {
         endpoint: 'https://s3.example.test',
         region: 'us-east-1',
         bucket: 'inventories',
-        objectKey: 'hsync.json',
+        objectKey: 'cairn.json',
         accessKeyId: 'AKIAEXAMPLE',
         secretAccessKey: 'secret-value-not-asserted',
         forcePathStyle: true,

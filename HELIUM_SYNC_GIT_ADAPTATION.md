@@ -5,7 +5,7 @@
 This document originally recorded the decision to adopt a native-companion
 boundary from `helium-sync-git`. That decision was **reversed** on
 2026-08-31, per plan 006 (`plans/006-remove-native-companion.md`), and the
-native companion (`hsyncd`) was deleted from the codebase. This file is kept,
+native companion (`the native companion`) was deleted from the codebase. This file is kept,
 rewritten, so the reversal — and the reasoning behind it — is not silently
 reopened later.
 
@@ -19,14 +19,14 @@ it needs atomic replacement, process locking, and checksummed three-way file
 comparison — and a native process, outside the browser sandbox, is a
 reasonable way to do that work.
 
-hsync does not have that problem. It synchronizes exactly **one JSON
+Cairn does not have that problem. It synchronizes exactly **one JSON
 document, under 768 KB**: the extension inventory. Every browser API needed to
 produce and consume that document (`browser.management`, `browser.storage`)
 is already available to an extension without leaving the sandbox. The native
 companion's actual justification — safe, atomic, lock-aware access to
-mutable, browser-owned files on disk — never applied to hsync's payload. The
+mutable, browser-owned files on disk — never applied to Cairn's payload. The
 architecture was adopted from the reference project's *pattern*, not from a
-requirement hsync actually had.
+requirement Cairn actually had.
 
 ## Why removal, and not just non-use
 
@@ -77,7 +77,7 @@ of audience, and it is the deliberate trade this reversal makes.
 
 ## Current model
 
-hsync is now browser-only. It supports exactly the connection model that
+Cairn is now browser-only. It supports exactly the connection model that
 `BOOKMARKORA_ADAPTATION.md` describes: Git-host APIs, Gitea, WebDAV, and S3,
 all over HTTPS with tokens, all implemented under `src/backends/` and
 `src/browser/`. There is no native process, no OS keyring dependency, and no

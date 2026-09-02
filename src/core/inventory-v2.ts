@@ -152,7 +152,7 @@ export function parseInventoryJsonV2(text: string): InventoryDocumentV2 {
   if (!isInventoryDocumentV2(value)) {
     throw new InventoryFormatError(
       'invalid_inventory',
-      'The selected JSON file is not a valid hsync inventory.',
+      'The selected JSON file is not a valid Cairn inventory.',
     );
   }
 

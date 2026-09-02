@@ -67,7 +67,7 @@ vi.mock('../src/backends/webdav', async (importOriginal) => {
 
 const config = {
   baseUrl: 'https://dav.example.test/remote/user/hsync',
-  fileName: 'hsync.json',
+  fileName: 'cairn.json',
   username: 'alice',
   password: 'app-password',
 };
@@ -108,7 +108,7 @@ describe('WebDavBackend', () => {
     expect(new TextDecoder().decode(result?.data)).toBe('{"schemaVersion":1}');
     expect(result?.version).toBe('"v1"');
     expect(fetcher).toHaveBeenCalledWith(
-      'https://dav.example.test/remote/user/hsync/hsync.json',
+      'https://dav.example.test/remote/user/hsync/cairn.json',
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -334,7 +334,7 @@ describe('WebDAV service (v2 sync path)', () => {
   it('pull against an absent remote keeps its not_found wording', async () => {
     await expect(pullWebDavInventory()).rejects.toMatchObject({
       code: 'not_found',
-      message: 'No hsync inventory exists at this WebDAV location yet.',
+      message: 'No Cairn inventory exists at this WebDAV location yet.',
     });
   });
 
