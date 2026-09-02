@@ -15,7 +15,9 @@ export default defineConfig({
     // Chrome Web Store truncates at 132 characters; keep it inside that.
     description:
       'Back up your extensions and bookmarks to storage you control: Git, Gitea, WebDAV, or S3. No account, no server of ours.',
-    version: '0.1.0',
+    // version is intentionally omitted: WXT derives it from package.json, so
+    // `npm version` is the single bump. A mismatch would fail the release
+    // workflow's tag guard.
     permissions: ['management', 'storage', 'bookmarks'],
     action: {
       default_title: 'Cairn',
