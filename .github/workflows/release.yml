@@ -1,0 +1,98 @@
+name: Release
+
+# Tag a version to cut a release:
+#   npm version 0.2.0 && git push --follow-tags
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (for a manual re-run)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      # Never ship an artifact that has not passed the same gate as main.
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run build:firefox
+
+      - name: Confirm the tag matches the manifest version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          MANIFEST=$(node -p "require('./.output/chrome-mv3/manifest.json').version")
+          echo "tag=$TAG manifest=$MANIFEST"
+          test "$TAG" = "$MANIFEST" || {
+            echo "::error::Tag $TAG does not match manifest version $MANIFEST. Run npm version first."
+            exit 1
+          }
+
+      - name: Package store archives
+        run: |
+          npm run zip
+          npm run zip:firefox
+
+      # A CRX is only signable with the private key that defines the extension
+      # id. Skipped entirely when the secret is absent, so forks and PRs still
+      # produce a usable release.
+      - name: Sign the CRX
+        if: ${{ secrets.CRX_PRIVATE_KEY != '' }}
+        env:
+          CRX_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$CRX_KEY" > /tmp/cairn.pem
+          npx --yes crx3 -p /tmp/cairn.pem -o ".output/cairn-${GITHUB_REF_NAME#v}.crx" .output/chrome-mv3
+          shred -u /tmp/cairn.pem
+
+      # Mozilla-signed XPI. This is the one artifact a user can genuinely
+      # click and install: AMO signs unlisted add-ons for self-hosting, and
+      # Firefox refuses anything unsigned.
+      - name: Sign the XPI with AMO
+        if: ${{ secrets.AMO_JWT_ISSUER != '' }}
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          npx --yes web-ext sign \
+            --source-dir .output/firefox-mv3 \
+            --artifacts-dir .output/signed \
+            --channel unlisted \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET"
+          mv .output/signed/*.xpi ".output/cairn-${GITHUB_REF_NAME#v}.xpi" || true
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            .output/*.zip
+            .output/*.crx
+            .output/*.xpi
+          body: |
+            ## Install
+
+            **Firefox** — download `cairn-*.xpi` and open it. It is signed by
+            Mozilla, so it installs and updates normally.
+
+            **Chromium / Helium / Brave** — download `cairn-*-chrome.zip`,
+            unzip it, then `chrome://extensions` → enable Developer mode →
+            **Load unpacked** → pick the unzipped folder.
+
+            The `.crx` is provided for enterprise policy deployment. Google
+            Chrome refuses off-store `.crx` installs, so clicking it will not
+            work there; some Chromium forks still allow it in Developer mode.
