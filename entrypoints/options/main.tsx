@@ -14,11 +14,26 @@ import { normalizeWebDavConfig, webDavOriginPattern } from '../../src/backends/w
 import { normalizeS3Config, s3OriginPattern } from '../../src/backends/s3';
 import { giteaOriginPattern, normalizeGiteaConfig } from '../../src/backends/gitea';
 import { gitHubOriginPattern, normalizeGitHubConfig } from '../../src/backends/github';
-import type { StoredWebDavConfig } from '../../src/browser/webdav-store';
 import './style.css';
 
 async function sendRequest(request: HsyncRequest) {
   return browser.runtime.sendMessage(request) as Promise<HsyncResponse>;
+}
+
+// Fetches one backend's stored config and hands it to `apply` when one exists.
+// The four config loads were identical apart from the response key each
+// narrows on and the state pair it hydrates, so the narrowing stays with the
+// caller and everything else lives here once.
+function loadStoredConfig<T>(
+  request: HsyncRequest,
+  pick: (response: Extract<HsyncResponse, { ok: true }>) => T | null | undefined,
+  apply: (config: T) => void,
+) {
+  void sendRequest(request).then((response) => {
+    if (!response.ok) return;
+    const config = pick(response);
+    if (config) apply(config);
+  });
 }
 
 function downloadInventory(inventory: InventoryDocument) {
@@ -54,6 +69,39 @@ const NAV_SECTIONS = [
   { id: 'bookmarks', label: 'Bookmarks' },
   { id: 'connections', label: 'Connections' },
 ] as const;
+
+// The connection handlers had the same duplication the service layer had
+// before `createBackendService`: four copies each of test-and-save,
+// pull/upload, and upgrade, differing only in strings, request types, and
+// which state pair they wrote. Each backend now declares those differences in
+// a ConnectionSpec and three generic handlers inside App do the work once.
+//
+// What stays per-backend: `prepareTest`, because each backend has its own
+// normalize function, permission origin, and config state to write back — and
+// the notices, because users read them and "S3 inventory" is not "Git
+// inventory".
+type ConnectionKey = 'webdav' | 's3' | 'gitea' | 'github';
+
+interface ConnectionSpec {
+  /**
+   * Busy keys are load-bearing strings: the render disables and relabels
+   * buttons by comparing against these exact values, and
+   * `tests/options-upgrade.test.tsx` asserts on them. WebDAV predates the
+   * other backends, which is why its keys are unprefixed.
+   */
+  busy: { test: string; pull: string; upload: string; upgrade: string };
+  requests: { pull: HsyncRequest; upload: HsyncRequest; upgrade: HsyncRequest };
+  notices: { saved: string; pulled: string; uploaded: string; upgraded: string };
+  /** Shown when the user dismisses the host-permission prompt. */
+  permissionDenied: string;
+  setSaved: (saved: boolean) => void;
+  /**
+   * Normalizes the current form state and packages what the generic
+   * test-and-save handler needs: the origin to request permission for, the
+   * message to send, and how to write the normalized config back to the form.
+   */
+  prepareTest: () => { origin: string; request: HsyncRequest; commit: () => void };
+}
 
 // Exported for tests; the module still mounts itself below when a #root
 // element exists, which it does not under jsdom.
@@ -139,41 +187,43 @@ export function App() {
     });
   }, []);
 
+  // Hydrate every saved connection once at mount. Secrets never come back —
+  // the stored configs are public fields only — so each form merges over its
+  // defaults and marks itself Configured. S3 additionally drops
+  // `hasSessionToken`, a status flag the form has no field for.
   useEffect(() => {
-    void sendRequest({ type: 'github:get-config' }).then((response) => {
-      if (response.ok && 'githubConfig' in response && response.githubConfig) {
-        setGitHub((current) => ({ ...current, ...response.githubConfig }));
+    loadStoredConfig(
+      { type: 'github:get-config' },
+      (response) => ('githubConfig' in response ? response.githubConfig : null),
+      (config) => {
+        setGitHub((current) => ({ ...current, ...config }));
         setGitHubSaved(true);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    void sendRequest({ type: 'gitea:get-config' }).then((response) => {
-      if (response.ok && 'giteaConfig' in response && response.giteaConfig) {
-        setGitea((current) => ({ ...current, ...response.giteaConfig }));
+      },
+    );
+    loadStoredConfig(
+      { type: 'gitea:get-config' },
+      (response) => ('giteaConfig' in response ? response.giteaConfig : null),
+      (config) => {
+        setGitea((current) => ({ ...current, ...config }));
         setGiteaSaved(true);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    void sendRequest({ type: 's3:get-config' }).then((response) => {
-      if (response.ok && 's3Config' in response && response.s3Config) {
-        const { hasSessionToken: _hasSessionToken, ...publicConfig } = response.s3Config;
+      },
+    );
+    loadStoredConfig(
+      { type: 's3:get-config' },
+      (response) => ('s3Config' in response ? response.s3Config : null),
+      ({ hasSessionToken: _hasSessionToken, ...publicConfig }) => {
         setS3((current) => ({ ...current, ...publicConfig }));
         setS3Saved(true);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    void sendRequest({ type: 'webdav:get-config' }).then((response) => {
-      if (response.ok && 'webdavConfig' in response && response.webdavConfig) {
-        setWebdav((current) => ({ ...current, ...response.webdavConfig }));
+      },
+    );
+    loadStoredConfig(
+      { type: 'webdav:get-config' },
+      (response) => ('webdavConfig' in response ? response.webdavConfig : null),
+      (config) => {
+        setWebdav((current) => ({ ...current, ...config }));
         setWebdavSaved(true);
-      }
-    });
+      },
+    );
   }, []);
 
   const visible = useMemo(() => {
@@ -204,58 +254,178 @@ export function App() {
     }
   };
 
-  const testAndSaveWebDav = async () => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('test');
-    try {
-      const normalized = normalizeWebDavConfig(webdav);
-      const granted = await browser.permissions.request({
-        origins: [webDavOriginPattern(normalized.baseUrl)],
-      });
-      if (!granted) throw new Error('Endpoint access was not granted.');
-      const response = await sendRequest({
-        type: 'webdav:test-and-save',
-        config: normalized,
-      });
-      if (!response.ok) throw new Error(response.error);
-      setWebdav(normalized);
-      setWebdavSaved(true);
-      setNotice('WebDAV connection verified and saved locally.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
+  // Rebuilt every render so `prepareTest` closes over the current form state,
+  // exactly as the sixteen per-backend handlers it replaces did.
+  const connections: Record<ConnectionKey, ConnectionSpec> = {
+    webdav: {
+      busy: { test: 'test', pull: 'pull', upload: 'upload', upgrade: 'upgrade' },
+      requests: {
+        pull: { type: 'webdav:pull' },
+        upload: { type: 'webdav:upload' },
+        upgrade: { type: 'webdav:upgrade' },
+      },
+      notices: {
+        saved: 'WebDAV connection verified and saved locally.',
+        pulled: 'Remote inventory pulled into Compare.',
+        uploaded: 'Local inventory uploaded with conflict protection.',
+        upgraded: 'Remote inventory converted to the multi-device format.',
+      },
+      permissionDenied: 'Endpoint access was not granted.',
+      setSaved: setWebdavSaved,
+      prepareTest: () => {
+        const normalized = normalizeWebDavConfig(webdav);
+        return {
+          origin: webDavOriginPattern(normalized.baseUrl),
+          request: { type: 'webdav:test-and-save', config: normalized },
+          commit: () => setWebdav(normalized),
+        };
+      },
+    },
+    s3: {
+      busy: { test: 's3-test', pull: 's3-pull', upload: 's3-upload', upgrade: 's3-upgrade' },
+      requests: {
+        pull: { type: 's3:pull' },
+        upload: { type: 's3:upload' },
+        upgrade: { type: 's3:upgrade' },
+      },
+      notices: {
+        saved: 'S3 connection verified and saved locally.',
+        pulled: 'S3 inventory pulled into Compare.',
+        uploaded: 'Local inventory uploaded to S3 with conflict protection.',
+        upgraded: 'S3 inventory converted to the multi-device format.',
+      },
+      permissionDenied: 'S3 endpoint access was not granted.',
+      setSaved: setS3Saved,
+      prepareTest: () => {
+        const normalized = normalizeS3Config(s3);
+        return {
+          origin: s3OriginPattern(normalized),
+          request: { type: 's3:test-and-save', config: normalized },
+          // The form keeps `sessionToken` as a string, so an absent token
+          // writes back as the empty field.
+          commit: () => setS3({ ...normalized, sessionToken: normalized.sessionToken ?? '' }),
+        };
+      },
+    },
+    gitea: {
+      busy: {
+        test: 'gitea-test',
+        pull: 'gitea-pull',
+        upload: 'gitea-upload',
+        upgrade: 'gitea-upgrade',
+      },
+      requests: {
+        pull: { type: 'gitea:pull' },
+        upload: { type: 'gitea:upload' },
+        upgrade: { type: 'gitea:upgrade' },
+      },
+      notices: {
+        saved: 'Gitea connection verified and saved locally.',
+        pulled: 'Gitea inventory pulled into Compare.',
+        uploaded: 'Local inventory committed to Gitea with conflict protection.',
+        upgraded: 'Gitea inventory converted to the multi-device format.',
+      },
+      permissionDenied: 'Gitea endpoint access was not granted.',
+      setSaved: setGiteaSaved,
+      prepareTest: () => {
+        const normalized = normalizeGiteaConfig(gitea);
+        return {
+          origin: giteaOriginPattern(normalized.baseUrl),
+          request: { type: 'gitea:test-and-save', config: normalized },
+          commit: () => setGitea(normalized),
+        };
+      },
+    },
+    github: {
+      busy: {
+        test: 'github-test',
+        pull: 'github-pull',
+        upload: 'github-upload',
+        upgrade: 'github-upgrade',
+      },
+      requests: {
+        pull: { type: 'github:pull' },
+        upload: { type: 'github:upload' },
+        upgrade: { type: 'github:upgrade' },
+      },
+      notices: {
+        saved: 'Git repository connection verified and saved locally.',
+        pulled: 'Git inventory pulled into Compare.',
+        uploaded: 'Local inventory committed with conflict protection.',
+        upgraded: 'Git inventory converted to the multi-device format.',
+      },
+      permissionDenied: 'GitHub API access was not granted.',
+      setSaved: setGitHubSaved,
+      prepareTest: () => {
+        const normalized = normalizeGitHubConfig(github);
+        return {
+          origin: gitHubOriginPattern(normalized.apiUrl),
+          request: { type: 'github:test-and-save', config: normalized },
+          commit: () => setGitHub(normalized),
+        };
+      },
+    },
   };
 
-  const runWebDavAction = async (action: 'pull' | 'upload') => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy(action);
-    try {
-      const response = await sendRequest({ type: `webdav:${action}` });
-      if (!response.ok) throw new Error(response.error);
-      if (action === 'pull' && 'inventory' in response) {
-        setBaseline(response.inventory);
-      }
-      setNotice(
-        action === 'pull'
-          ? 'Remote inventory pulled into Compare.'
-          : 'Local inventory uploaded with conflict protection.',
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const runBookmarkRequest = async (request: HsyncRequest, busyKey: string) => {
+  // Shared wrapper for every remote call: clears the banners, holds the busy
+  // key while the call runs, and turns any failure into the error banner —
+  // the try/catch/finally every handler used to repeat.
+  const withRemoteBusy = async (busyKey: string, task: () => Promise<void>) => {
     setError(null);
     setNotice(null);
     setRemoteBusy(busyKey);
     try {
+      await task();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRemoteBusy(null);
+    }
+  };
+
+  const testAndSaveConnection = async (key: ConnectionKey) => {
+    const spec = connections[key];
+    await withRemoteBusy(spec.busy.test, async () => {
+      const prepared = spec.prepareTest();
+      // The permission prompt must run here in the click handler, while the
+      // user gesture is live; the background worker cannot show it.
+      const granted = await browser.permissions.request({ origins: [prepared.origin] });
+      if (!granted) throw new Error(spec.permissionDenied);
+      const response = await sendRequest(prepared.request);
+      if (!response.ok) throw new Error(response.error);
+      prepared.commit();
+      spec.setSaved(true);
+      setNotice(spec.notices.saved);
+    });
+  };
+
+  const runConnectionAction = async (key: ConnectionKey, action: 'pull' | 'upload') => {
+    const spec = connections[key];
+    await withRemoteBusy(spec.busy[action], async () => {
+      const response = await sendRequest(spec.requests[action]);
+      if (!response.ok) throw new Error(response.error);
+      // Pull lands in Compare rather than replacing the local inventory.
+      if (action === 'pull' && 'inventory' in response) setBaseline(response.inventory);
+      setNotice(action === 'pull' ? spec.notices.pulled : spec.notices.uploaded);
+    });
+  };
+
+  const runConnectionUpgrade = async (key: ConnectionKey) => {
+    if (!window.confirm(UPGRADE_CONFIRM_MESSAGE)) return;
+    const spec = connections[key];
+    await withRemoteBusy(spec.busy.upgrade, async () => {
+      const response = await sendRequest(spec.requests.upgrade);
+      if (!response.ok) throw new Error(response.error);
+      setNotice(
+        'upgraded' in response && !response.upgraded
+          ? 'This inventory is already in the multi-device format.'
+          : spec.notices.upgraded,
+      );
+    });
+  };
+
+  const runBookmarkRequest = async (request: HsyncRequest, busyKey: string) => {
+    await withRemoteBusy(busyKey, async () => {
       const response = await sendRequest(request);
       if (!response.ok) throw new Error(response.error);
       if ('bookmarks' in response && response.bookmarks) {
@@ -269,228 +439,12 @@ export function App() {
           `Restored ${response.restore.createdBookmarks} bookmarks into "${response.restore.folderTitle}".`,
         );
       }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
+    });
   };
 
   const restoreBookmarkBackup = async () => {
     if (!window.confirm(RESTORE_CONFIRM_MESSAGE)) return;
     await runBookmarkRequest({ type: 'bookmarks:restore' }, 'bookmarks-restore');
-  };
-
-  const runWebDavUpgrade = async () => {
-    if (!window.confirm(UPGRADE_CONFIRM_MESSAGE)) return;
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('upgrade');
-    try {
-      const response = await sendRequest({ type: 'webdav:upgrade' });
-      if (!response.ok) throw new Error(response.error);
-      setNotice(
-        'upgraded' in response && !response.upgraded
-          ? 'This inventory is already in the multi-device format.'
-          : 'Remote inventory converted to the multi-device format.',
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const testAndSaveS3 = async () => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('s3-test');
-    try {
-      const normalized = normalizeS3Config(s3);
-      const granted = await browser.permissions.request({
-        origins: [s3OriginPattern(normalized)],
-      });
-      if (!granted) throw new Error('S3 endpoint access was not granted.');
-      const response = await sendRequest({
-        type: 's3:test-and-save',
-        config: normalized,
-      });
-      if (!response.ok) throw new Error(response.error);
-      setS3({ ...normalized, sessionToken: normalized.sessionToken ?? '' });
-      setS3Saved(true);
-      setNotice('S3 connection verified and saved locally.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const runS3Action = async (action: 'pull' | 'upload') => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy(`s3-${action}`);
-    try {
-      const response = await sendRequest({ type: `s3:${action}` });
-      if (!response.ok) throw new Error(response.error);
-      if (action === 'pull' && 'inventory' in response) setBaseline(response.inventory);
-      setNotice(
-        action === 'pull'
-          ? 'S3 inventory pulled into Compare.'
-          : 'Local inventory uploaded to S3 with conflict protection.',
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const runS3Upgrade = async () => {
-    if (!window.confirm(UPGRADE_CONFIRM_MESSAGE)) return;
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('s3-upgrade');
-    try {
-      const response = await sendRequest({ type: 's3:upgrade' });
-      if (!response.ok) throw new Error(response.error);
-      setNotice(
-        'upgraded' in response && !response.upgraded
-          ? 'This inventory is already in the multi-device format.'
-          : 'S3 inventory converted to the multi-device format.',
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const testAndSaveGitea = async () => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('gitea-test');
-    try {
-      const normalized = normalizeGiteaConfig(gitea);
-      const granted = await browser.permissions.request({
-        origins: [giteaOriginPattern(normalized.baseUrl)],
-      });
-      if (!granted) throw new Error('Gitea endpoint access was not granted.');
-      const response = await sendRequest({
-        type: 'gitea:test-and-save',
-        config: normalized,
-      });
-      if (!response.ok) throw new Error(response.error);
-      setGitea(normalized);
-      setGiteaSaved(true);
-      setNotice('Gitea connection verified and saved locally.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const testAndSaveGitHub = async () => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('github-test');
-    try {
-      const normalized = normalizeGitHubConfig(github);
-      const granted = await browser.permissions.request({
-        origins: [gitHubOriginPattern(normalized.apiUrl)],
-      });
-      if (!granted) throw new Error('GitHub API access was not granted.');
-      const response = await sendRequest({ type: 'github:test-and-save', config: normalized });
-      if (!response.ok) throw new Error(response.error);
-      setGitHub(normalized);
-      setGitHubSaved(true);
-      setNotice('Git repository connection verified and saved locally.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const runGitHubAction = async (action: 'pull' | 'upload') => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy(`github-${action}`);
-    try {
-      const response = await sendRequest({ type: `github:${action}` });
-      if (!response.ok) throw new Error(response.error);
-      if (action === 'pull' && 'inventory' in response) setBaseline(response.inventory);
-      setNotice(
-        action === 'pull'
-          ? 'Git inventory pulled into Compare.'
-          : 'Local inventory committed with conflict protection.',
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const runGitHubUpgrade = async () => {
-    if (!window.confirm(UPGRADE_CONFIRM_MESSAGE)) return;
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('github-upgrade');
-    try {
-      const response = await sendRequest({ type: 'github:upgrade' });
-      if (!response.ok) throw new Error(response.error);
-      setNotice(
-        'upgraded' in response && !response.upgraded
-          ? 'This inventory is already in the multi-device format.'
-          : 'Git inventory converted to the multi-device format.',
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const runGiteaAction = async (action: 'pull' | 'upload') => {
-    setError(null);
-    setNotice(null);
-    setRemoteBusy(`gitea-${action}`);
-    try {
-      const response = await sendRequest({ type: `gitea:${action}` });
-      if (!response.ok) throw new Error(response.error);
-      if (action === 'pull' && 'inventory' in response) setBaseline(response.inventory);
-      setNotice(
-        action === 'pull'
-          ? 'Gitea inventory pulled into Compare.'
-          : 'Local inventory committed to Gitea with conflict protection.',
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
-  };
-
-  const runGiteaUpgrade = async () => {
-    if (!window.confirm(UPGRADE_CONFIRM_MESSAGE)) return;
-    setError(null);
-    setNotice(null);
-    setRemoteBusy('gitea-upgrade');
-    try {
-      const response = await sendRequest({ type: 'gitea:upgrade' });
-      if (!response.ok) throw new Error(response.error);
-      setNotice(
-        'upgraded' in response && !response.upgraded
-          ? 'This inventory is already in the multi-device format.'
-          : 'Gitea inventory converted to the multi-device format.',
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setRemoteBusy(null);
-    }
   };
 
   const clearBaseline = async () => {
@@ -778,17 +732,17 @@ export function App() {
             </label>
           </div>
           <div className="connection-footer">
-            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveGitHub()}>
+            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveConnection('github')}>
               {remoteBusy === 'github-test' ? 'Testing…' : 'Test & save'}
             </button>
             <div>
-              <button className="secondary-button" disabled={!githubSaved || remoteBusy !== null} onClick={() => void runGitHubUpgrade()}>
+              <button className="secondary-button" disabled={!githubSaved || remoteBusy !== null} onClick={() => void runConnectionUpgrade('github')}>
                 {remoteBusy === 'github-upgrade' ? 'Upgrading…' : 'Upgrade to multi-device'}
               </button>
-              <button className="secondary-button" disabled={!githubSaved || remoteBusy !== null} onClick={() => void runGitHubAction('pull')}>
+              <button className="secondary-button" disabled={!githubSaved || remoteBusy !== null} onClick={() => void runConnectionAction('github', 'pull')}>
                 {remoteBusy === 'github-pull' ? 'Pulling…' : 'Pull'}
               </button>
-              <button disabled={!githubSaved || !inventory || remoteBusy !== null} onClick={() => void runGitHubAction('upload')}>
+              <button disabled={!githubSaved || !inventory || remoteBusy !== null} onClick={() => void runConnectionAction('github', 'upload')}>
                 {remoteBusy === 'github-upload' ? 'Committing…' : 'Commit local'}
               </button>
             </div>
@@ -874,17 +828,17 @@ export function App() {
             </label>
           </div>
           <div className="connection-footer">
-            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveGitea()}>
+            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveConnection('gitea')}>
               {remoteBusy === 'gitea-test' ? 'Testing…' : 'Test & save'}
             </button>
             <div>
-              <button className="secondary-button" disabled={!giteaSaved || remoteBusy !== null} onClick={() => void runGiteaUpgrade()}>
+              <button className="secondary-button" disabled={!giteaSaved || remoteBusy !== null} onClick={() => void runConnectionUpgrade('gitea')}>
                 {remoteBusy === 'gitea-upgrade' ? 'Upgrading…' : 'Upgrade to multi-device'}
               </button>
-              <button className="secondary-button" disabled={!giteaSaved || remoteBusy !== null} onClick={() => void runGiteaAction('pull')}>
+              <button className="secondary-button" disabled={!giteaSaved || remoteBusy !== null} onClick={() => void runConnectionAction('gitea', 'pull')}>
                 {remoteBusy === 'gitea-pull' ? 'Pulling…' : 'Pull'}
               </button>
-              <button disabled={!giteaSaved || !inventory || remoteBusy !== null} onClick={() => void runGiteaAction('upload')}>
+              <button disabled={!giteaSaved || !inventory || remoteBusy !== null} onClick={() => void runConnectionAction('gitea', 'upload')}>
                 {remoteBusy === 'gitea-upload' ? 'Committing…' : 'Commit local'}
               </button>
             </div>
@@ -951,17 +905,17 @@ export function App() {
             </label>
           </div>
           <div className="connection-footer">
-            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveWebDav()}>
+            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveConnection('webdav')}>
               {remoteBusy === 'test' ? 'Testing…' : 'Test & save'}
             </button>
             <div>
-              <button className="secondary-button" disabled={!webdavSaved || remoteBusy !== null} onClick={() => void runWebDavUpgrade()}>
+              <button className="secondary-button" disabled={!webdavSaved || remoteBusy !== null} onClick={() => void runConnectionUpgrade('webdav')}>
                 {remoteBusy === 'upgrade' ? 'Upgrading…' : 'Upgrade to multi-device'}
               </button>
-              <button className="secondary-button" disabled={!webdavSaved || remoteBusy !== null} onClick={() => void runWebDavAction('pull')}>
+              <button className="secondary-button" disabled={!webdavSaved || remoteBusy !== null} onClick={() => void runConnectionAction('webdav', 'pull')}>
                 {remoteBusy === 'pull' ? 'Pulling…' : 'Pull'}
               </button>
-              <button disabled={!webdavSaved || !inventory || remoteBusy !== null} onClick={() => void runWebDavAction('upload')}>
+              <button disabled={!webdavSaved || !inventory || remoteBusy !== null} onClick={() => void runConnectionAction('webdav', 'upload')}>
                 {remoteBusy === 'upload' ? 'Uploading…' : 'Upload local'}
               </button>
             </div>
@@ -1072,17 +1026,17 @@ export function App() {
             <p className="cors-note wide-field">The bucket must allow GET, HEAD, and PUT from this extension and expose the ETag response header through CORS.</p>
           </div>
           <div className="connection-footer">
-            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveS3()}>
+            <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveConnection('s3')}>
               {remoteBusy === 's3-test' ? 'Testing…' : 'Test & save'}
             </button>
             <div>
-              <button className="secondary-button" disabled={!s3Saved || remoteBusy !== null} onClick={() => void runS3Upgrade()}>
+              <button className="secondary-button" disabled={!s3Saved || remoteBusy !== null} onClick={() => void runConnectionUpgrade('s3')}>
                 {remoteBusy === 's3-upgrade' ? 'Upgrading…' : 'Upgrade to multi-device'}
               </button>
-              <button className="secondary-button" disabled={!s3Saved || remoteBusy !== null} onClick={() => void runS3Action('pull')}>
+              <button className="secondary-button" disabled={!s3Saved || remoteBusy !== null} onClick={() => void runConnectionAction('s3', 'pull')}>
                 {remoteBusy === 's3-pull' ? 'Pulling…' : 'Pull'}
               </button>
-              <button disabled={!s3Saved || !inventory || remoteBusy !== null} onClick={() => void runS3Action('upload')}>
+              <button disabled={!s3Saved || !inventory || remoteBusy !== null} onClick={() => void runConnectionAction('s3', 'upload')}>
                 {remoteBusy === 's3-upload' ? 'Uploading…' : 'Upload local'}
               </button>
             </div>
