@@ -36,7 +36,7 @@ const UPGRADE_CONFIRM_MESSAGE =
   'Convert this remote inventory to the multi-device format? The conversion cannot be undone, and every other device syncing with this remote will need an up-to-date version of hsync to keep reading it.';
 
 const UPGRADE_HELP_TEXT =
-  'Multi-device format lets each device record its own state, so two browsers can sync to the same remote without overwriting each other.';
+  "Each device keeps its own record of what's installed, so a second browser syncing to the same remote adds to the inventory instead of replacing it. Convert a remote once, from any device.";
 
 // Every entry must correspond to a section id that exists below. Restore,
 // Automation, and Safety were listed here before they were built, so clicking
@@ -565,6 +565,15 @@ export function App() {
         <section className="connection-card" id="connections">
           <div className="section-heading">
             <div>
+              <h2>Connections</h2>
+              <p>{UPGRADE_HELP_TEXT}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="connection-card">
+          <div className="section-heading">
+            <div>
               <h2>Git repository connection</h2>
               <p>Commit through GitHub or a GitHub Enterprise-compatible Contents API.</p>
             </div>
@@ -640,7 +649,6 @@ export function App() {
               />
               <small>Use a fine-grained token with Contents read/write access to this repository.</small>
             </label>
-            <p className="cors-note wide-field">{UPGRADE_HELP_TEXT}</p>
           </div>
           <div className="connection-footer">
             <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveGitHub()}>
@@ -737,7 +745,6 @@ export function App() {
               />
               <small>Use a token restricted to repository read/write access. It stays in this browser profile.</small>
             </label>
-            <p className="cors-note wide-field">{UPGRADE_HELP_TEXT}</p>
           </div>
           <div className="connection-footer">
             <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveGitea()}>
@@ -815,7 +822,6 @@ export function App() {
               />
               <small>Stored only in this browser profile. HTTPS is required except on localhost.</small>
             </label>
-            <p className="cors-note wide-field">{UPGRADE_HELP_TEXT}</p>
           </div>
           <div className="connection-footer">
             <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveWebDav()}>
@@ -937,7 +943,6 @@ export function App() {
               <span>Use path-style addressing (recommended for MinIO, RustFS, localhost, and buckets containing dots)</span>
             </label>
             <p className="cors-note wide-field">The bucket must allow GET, HEAD, and PUT from this extension and expose the ETag response header through CORS.</p>
-            <p className="cors-note wide-field">{UPGRADE_HELP_TEXT}</p>
           </div>
           <div className="connection-footer">
             <button className="secondary-button" disabled={remoteBusy !== null} onClick={() => void testAndSaveS3()}>
