@@ -101,8 +101,10 @@ jobs:
           body: |
             ## Install
 
-            **Firefox** — download `cairn-*.xpi` and open it. It is signed by
-            Mozilla, so it installs and updates normally.
+            **Firefox** — download `cairn-*.xpi` and open it. Mozilla signs it
+            for self-hosting, so release Firefox installs it. Updates are
+            manual: Cairn publishes no update manifest, so install the next
+            `.xpi` the same way.
 
             **Chromium / Helium / Brave** — download `cairn-*-chrome.zip`,
             unzip it, then `chrome://extensions` → enable Developer mode →
