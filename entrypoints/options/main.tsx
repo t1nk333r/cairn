@@ -49,7 +49,9 @@ const NAV_SECTIONS = [
   { id: 'connections', label: 'Connections' },
 ] as const;
 
-function App() {
+// Exported for tests; the module still mounts itself below when a #root
+// element exists, which it does not under jsdom.
+export function App() {
   const [activeSection, setActiveSection] = useState<string>(
     () => window.location.hash.slice(1) || NAV_SECTIONS[0].id,
   );
