@@ -94,7 +94,7 @@ npm run dev:firefox
 ## License
 
 hsync is licensed under the GNU Affero General Public License, version 3 or
-later (`AGPL-3.0-or-later`). See `LICENSE` for the full text.
+later (`AGPL-3.0-or-later`). The full text is in [`LICENSE`](LICENSE).
 
 AGPL was chosen because hsync is aimed at self-hosting: it keeps the source
 available to anyone who runs a modified version as a network service.
