@@ -505,7 +505,7 @@ export function App() {
   return (
     <div className="app-shell">
       <aside>
-        <div className="wordmark"><span>c</span><strong>Cairn</strong></div>
+        <div className="wordmark"><img src="/icon/32.png" alt="" width={24} height={24} /><strong>Cairn</strong></div>
         <nav aria-label="Control center">
           {NAV_SECTIONS.map((section) => (
             <a
