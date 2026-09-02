@@ -15,3 +15,7 @@ coverage/
 # advisor audit trail and handoff notes, kept local
 plans/
 HANDOFF.md
+
+# generated packages and signing keys
+dist/
+keys/

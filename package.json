@@ -17,7 +17,9 @@
     "zip:firefox": "wxt zip -b firefox",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "pack:crx": "wxt build && chromium --pack-extension=$PWD/.output/chrome-mv3 --pack-extension-key=$PWD/keys/cairn.pem && mkdir -p dist && mv .output/chrome-mv3.crx dist/cairn-$npm_package_version.crx",
+    "pack:xpi": "wxt zip -b firefox && mkdir -p dist && cp .output/cairn-$npm_package_version-firefox.zip dist/cairn-$npm_package_version.xpi"
   },
   "dependencies": {
     "@wxt-dev/module-react": "^1.2.2",
