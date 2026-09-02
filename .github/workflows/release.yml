@@ -17,6 +17,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # `secrets` is not an available context in a step-level `if`, but it is at
+    # job level, so presence is resolved once here into a plain string flag.
+    env:
+      HAS_CRX_KEY: ${{ secrets.CRX_PRIVATE_KEY != '' }}
+      HAS_AMO_KEYS: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,7 +56,7 @@ jobs:
       # id. Skipped entirely when the secret is absent, so forks and PRs still
       # produce a usable release.
       - name: Sign the CRX
-        if: ${{ secrets.CRX_PRIVATE_KEY != '' }}
+        if: env.HAS_CRX_KEY == 'true'
         env:
           CRX_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
         run: |
@@ -63,7 +68,7 @@ jobs:
       # click and install: AMO signs unlisted add-ons for self-hosting, and
       # Firefox refuses anything unsigned.
       - name: Sign the XPI with AMO
-        if: ${{ secrets.AMO_JWT_ISSUER != '' }}
+        if: env.HAS_AMO_KEYS == 'true'
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
