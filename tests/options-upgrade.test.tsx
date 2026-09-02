@@ -72,6 +72,9 @@ beforeEach(() => {
         if (request.type in savedConfigs) return { ok: true, ...savedConfigs[request.type] };
         return { ok: true, inventory };
       },
+      // The sidebar reads the shipping version from the manifest rather than
+      // hardcoding it, so the mock has to answer this.
+      getManifest: () => ({ version: '0.1.0' }),
     },
     permissions: { request: async () => true },
   });

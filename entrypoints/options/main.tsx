@@ -239,6 +239,11 @@ export function App() {
     [inventory, baseline],
   );
 
+  // The difference lists compare "here" against the imported or pulled
+  // inventory, so they need a name for the other side. Fall back to neutral
+  // wording rather than rendering an empty label.
+  const otherDeviceLabel = baseline?.device.label?.trim() || 'the other device';
+
   const importBaseline = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
@@ -473,7 +478,10 @@ export function App() {
             </a>
           ))}
         </nav>
-        <p>Local-only preview<br />Milestone 1</p>
+        {/* Read the version from the manifest rather than repeating it here:
+            the manifest itself derives it from package.json, so `npm version`
+            stays the only place a release is bumped. */}
+        <p>Version {browser.runtime.getManifest().version}<br />Extensions and bookmarks</p>
       </aside>
       <main>
         <header>
@@ -552,12 +560,47 @@ export function App() {
                   ))}
                 </div>
               )}
+              {/* The summary above counts all four categories, so every one of
+                  them needs a list underneath. Only `onlyRemote` was rendered
+                  before, which told the user "1 version changes" and then gave
+                  no way to find out which extension had changed. */}
+              {comparison.onlyLocal.length > 0 && (
+                <div className="difference-group">
+                  <h3>Only on this device</h3>
+                  {comparison.onlyLocal.map((item) => (
+                    <article key={`local:${item.browserFamily}:${item.id}`}>
+                      <div><strong>{item.name}</strong><span>{item.browserFamily} · v{item.version}</span></div>
+                      <span className="no-source">Not in {otherDeviceLabel}</span>
+                    </article>
+                  ))}
+                </div>
+              )}
+              {comparison.versionChanges.length > 0 && (
+                <div className="difference-group">
+                  <h3>Version differences</h3>
+                  {comparison.versionChanges.map((change) => (
+                    <article key={`version:${change.id}`}>
+                      <div><strong>{change.name}</strong><span>here v{change.localVersion} · {otherDeviceLabel} v{change.remoteVersion}</span></div>
+                    </article>
+                  ))}
+                </div>
+              )}
+              {comparison.stateChanges.length > 0 && (
+                <div className="difference-group">
+                  <h3>Enabled-state differences</h3>
+                  {comparison.stateChanges.map((change) => (
+                    <article key={`state:${change.id}`}>
+                      <div><strong>{change.name}</strong><span>{change.localEnabled ? 'Enabled' : 'Disabled'} here · {change.remoteEnabled ? 'enabled' : 'disabled'} on {otherDeviceLabel}</span></div>
+                    </article>
+                  ))}
+                </div>
+              )}
               {comparison.onlyLocal.length === 0 && comparison.onlyRemote.length === 0 && comparison.versionChanges.length === 0 && comparison.stateChanges.length === 0 && (
                 <div className="empty-state compact"><strong>Inventories match</strong><p>No extension ID, version, or enabled-state differences were found.</p></div>
               )}
             </div>
           ) : (
-            <div className="empty-state compact"><strong>No comparison inventory</strong><p>Export on one device and import on another. Remote backends will automate this next.</p></div>
+            <div className="empty-state compact"><strong>No comparison inventory</strong><p>Pull from a connected remote below, or import a JSON inventory exported from another device.</p></div>
           )}
         </section>
 
