@@ -1,17 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <!-- Cairn: stones stacked to mark a trail, so you can find your way back.
-       Three stones, not five: at a 16px toolbar size the gaps between stones
-       are what make it read as a stack rather than a blob, so they have to be
-       wider than a pixel. The badge carries its own contrast, which keeps the
-       mark legible on both light and dark toolbars. -->
-  <rect width="128" height="128" rx="28" fill="#1d2b2a"/>
-  <g fill="#e8e2d6">
-    <!-- Base stone: widest and squattest, slightly off-centre so the stack
-         reads as balanced rock rather than a stack of identical pills. -->
-    <path d="M18 100c0-9 11-15 46-15s46 6 46 15c0 8-8 13-46 13s-46-5-46-13z"/>
-    <!-- Middle stone -->
-    <path d="M31 64c0-8 9-13 33-13s33 5 33 13c0 8-8 13-33 13s-33-5-33-13z"/>
-    <!-- Cap stone: smallest, the piece that says "someone put this here". -->
-    <path d="M45 30c0-7 6-12 19-12s19 5 19 12c0 7-6 12-19 12s-19-5-19-12z"/>
+  <rect width="128" height="128" rx="28" fill="#22302d"/>
+  <g>
+    <!-- Chunky enough to read as rock rather than as lines of text, each one
+         tilted the opposite way to the one below so the stack looks balanced
+         by hand. Lighter toward the top, the way weathered stone stacks. -->
+    <rect x="24" y="88" width="80" height="25" rx="12.5" transform="rotate(-3 64 100)" fill="#bdb19b"/>
+    <rect x="33" y="60" width="62" height="22" rx="11" transform="rotate(4 64 71)" fill="#d7cdb9"/>
+    <rect x="43" y="36" width="44" height="19" rx="9.5" transform="rotate(-5 65 45)" fill="#ebe4d6"/>
+    <rect x="52" y="16" width="28" height="16" rx="8" transform="rotate(4 66 24)" fill="#fdfaf3"/>
   </g>
 </svg>
