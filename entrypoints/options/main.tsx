@@ -38,14 +38,15 @@ const UPGRADE_CONFIRM_MESSAGE =
 const UPGRADE_HELP_TEXT =
   'Multi-device format lets each device record its own state, so two browsers can sync to the same remote without overwriting each other.';
 
+// Every entry must correspond to a section id that exists below. Restore,
+// Automation, and Safety were listed here before they were built, so clicking
+// them highlighted the entry and scrolled nowhere; add each back alongside its
+// section, not ahead of it.
 const NAV_SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'extensions', label: 'Extensions' },
   { id: 'compare', label: 'Compare' },
-  { id: 'restore', label: 'Restore' },
   { id: 'connections', label: 'Connections' },
-  { id: 'automation', label: 'Automation' },
-  { id: 'safety', label: 'Safety' },
 ] as const;
 
 function App() {

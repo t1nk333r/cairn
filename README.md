@@ -44,8 +44,12 @@ user through restoring missing extensions. Inventories can be stored in:
 
 The project intentionally does not claim to silently install extensions.
 Browser security APIs do not allow an extension to silently install arbitrary
-ordinary extensions. Restore opens trusted store or project pages and then
-reconciles enabled/disabled state after the user completes installation.
+ordinary extensions.
+
+Guided restore is **not implemented yet**. Today hsync captures, compares, and
+syncs inventories; the Compare view links out to an extension's store or
+project page, but nothing detects installation or reconciles enabled/disabled
+state afterwards. See [PLAN.md](PLAN.md) Milestone 4 for the intended design.
 
 See [PLAN.md](PLAN.md) for the architecture and delivery sequence.
 The product structure intentionally adapts proven ideas from the MIT-licensed
@@ -63,12 +67,16 @@ was built and then removed on 2026-08-31 in favor of staying browser-only. See
 Requires a current Node.js release and npm.
 
 ```bash
-npm install
+npm ci
 npm test
 npm run typecheck
 npm run build
 npm run build:firefox
 ```
+
+Use `npm ci`, not `npm install` — a partial install can leave the optional
+platform binary for the bundler missing, which fails every build and test with
+an unrelated-looking error.
 
 Unpacked production builds are generated at:
 

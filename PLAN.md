@@ -137,10 +137,11 @@ Browsers cannot reliably clone and push to an arbitrary Git remote: SSH is not
 available to WebExtensions, and smart HTTP commonly lacks browser CORS support.
 The first Git adapter will therefore use a repository-host contents/commit API
 over HTTPS. Its configuration is provider-neutral where APIs are compatible.
-Truly arbitrary Git remotes are a later feature requiring a separately
-installed native companion. The companion uses Native Messaging, Git over SSH
-or HTTPS, and the operating-system credential store. It is not required by
-Gitea API, WebDAV, S3, or other browser-only backends.
+Truly arbitrary Git remotes are **out of scope**. A native companion that
+would have carried them (Native Messaging, Git over SSH or HTTPS, and the OS
+credential store) was built and then removed on 2026-08-31 in favor of staying
+browser-only; see `HELIUM_SYNC_GIT_ADAPTATION.md`. Git support is provided
+through repository-host APIs only.
 
 ### Gitea
 
