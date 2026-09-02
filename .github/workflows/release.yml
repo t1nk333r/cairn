@@ -20,10 +20,16 @@ jobs:
     # `secrets` is not an available context in a step-level `if`, but it is at
     # job level, so presence is resolved once here into a plain string flag.
     env:
+      # One source of truth for the version under release: the pushed tag, or
+      # the tag named in a manual re-run.
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
       HAS_CRX_KEY: ${{ secrets.CRX_PRIVATE_KEY != '' }}
       HAS_AMO_KEYS: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A manual re-run must build the tag, not the default branch.
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -39,11 +45,11 @@ jobs:
 
       - name: Confirm the tag matches the manifest version
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          VERSION="${TAG#v}"
           MANIFEST=$(node -p "require('./.output/chrome-mv3/manifest.json').version")
-          echo "tag=$TAG manifest=$MANIFEST"
-          test "$TAG" = "$MANIFEST" || {
-            echo "::error::Tag $TAG does not match manifest version $MANIFEST. Run npm version first."
+          echo "tag=$VERSION manifest=$MANIFEST"
+          test "$VERSION" = "$MANIFEST" || {
+            echo "::error::Tag $VERSION does not match manifest version $MANIFEST. Run npm version first."
             exit 1
           }
 
@@ -61,7 +67,7 @@ jobs:
           CRX_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
         run: |
           printf '%s' "$CRX_KEY" > /tmp/cairn.pem
-          npx --yes crx3 -p /tmp/cairn.pem -o ".output/cairn-${GITHUB_REF_NAME#v}.crx" .output/chrome-mv3
+          npx --yes crx3 -p /tmp/cairn.pem -o ".output/cairn-${TAG#v}.crx" .output/chrome-mv3
           shred -u /tmp/cairn.pem
 
       # Mozilla-signed XPI. This is the one artifact a user can genuinely
@@ -79,11 +85,12 @@ jobs:
             --channel unlisted \
             --api-key "$AMO_JWT_ISSUER" \
             --api-secret "$AMO_JWT_SECRET"
-          mv .output/signed/*.xpi ".output/cairn-${GITHUB_REF_NAME#v}.xpi" || true
+          mv .output/signed/*.xpi ".output/cairn-${TAG#v}.xpi"
 
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: |
             .output/*.zip
             .output/*.crx
