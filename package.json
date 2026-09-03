@@ -18,15 +18,17 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "pack:crx": "wxt build && chromium --pack-extension=$PWD/.output/chrome-mv3 --pack-extension-key=$PWD/keys/cairn.pem && mkdir -p dist && mv .output/chrome-mv3.crx dist/cairn-$npm_package_version.crx",
+    "pack:crx": "node scripts/pack-crx.mjs",
     "pack:xpi": "wxt zip -b firefox && mkdir -p dist && cp .output/cairn-$npm_package_version-firefox.zip dist/cairn-$npm_package_version.xpi",
     "sign:xpi": "bash scripts/sign-xpi.sh",
+    "release:crx": "npm run pack:crx && gh release upload v$npm_package_version dist/cairn-$npm_package_version.crx --clobber",
     "update-manifest": "node scripts/update-manifest.mjs",
     "version": "node scripts/update-manifest.mjs && git add updates.json"
   },
-  "//": "Add-on identity lives here so wxt.config.ts and scripts/update-manifest.mjs read one source. Changing geckoId strands every existing install.",
+  "//": "Add-on identity lives here so wxt.config.ts and scripts/*.mjs read one source. Changing geckoId or crxId strands every existing install: the browser treats the result as a different extension.",
   "cairn": {
     "geckoId": "cairn@t1nk333r.dev",
+    "crxId": "bddeidknhkokohcgdkpgdmlppgfkblig",
     "strictMinVersion": "128.0",
     "updateManifestUrl": "https://raw.githubusercontent.com/t1nk333r/cairn/main/updates.json",
     "releaseDownloadBase": "https://github.com/t1nk333r/cairn/releases/download"
@@ -42,6 +44,7 @@
     "@types/node": "^22.20.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "crx3": "^2.0.0",
     "jsdom": "^30.0.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11",

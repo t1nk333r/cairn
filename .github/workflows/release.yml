@@ -75,9 +75,10 @@ jobs:
       # A CRX is only signable with the private key that defines the extension
       # id, and that key is deliberately not held in Actions secrets: it is the
       # permanent extension identity, and leaking it means a new id and a
-      # reinstall for every user. With the secret absent this step is skipped
-      # and no .crx is attached. If you ever do add CRX_PRIVATE_KEY, update the
-      # release body below, which currently states that no .crx is shipped.
+      # reinstall for every user. So this step normally does not run: the
+      # maintainer signs locally and attaches the .crx with
+      # `npm run release:crx`, which recomputes the extension id from the key
+      # and refuses to pack anything under a different one.
       - name: Sign the CRX
         if: env.HAS_CRX_KEY == 'true'
         env:
@@ -124,9 +125,10 @@ jobs:
             unzip it, then `chrome://extensions` → enable Developer mode →
             **Load unpacked** → pick the unzipped folder.
 
-            Google Chrome refuses off-store `.crx` installs, so no `.crx` is
-            attached here. For enterprise policy deployment, build one from
-            this tag with `npm run pack:crx` and your own signing key.
+            A maintainer-signed `cairn-*.crx` is attached. Google Chrome
+            refuses off-store `.crx` installs whatever the signature, so the
+            file is only useful for enterprise policy deployment and for
+            Chromium forks that accept a `.crx` in developer mode.
 
             `cairn-*-sources.zip` is the corresponding source archive for
             this build, as AGPL-3.0-or-later requires.
