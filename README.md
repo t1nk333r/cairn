@@ -34,8 +34,10 @@ choose **Load unpacked** on the unzipped folder.
 
 Google Chrome refuses to install any extension from outside the Web Store, and
 that block applies to signed `.crx` files too — Load unpacked is the only route
-until Cairn is listed. Some Chromium forks are more permissive; if yours
-accepts a `.crx`, build one with `npm run pack:crx` and your own signing key.
+on Chrome until Cairn is listed. A `cairn-<version>.crx` is attached to each
+tagged release, signed by hand with the maintainer's key, which is deliberately
+kept out of CI. It is useful for enterprise policy deployment and for Chromium
+forks that still accept a `.crx` in developer mode; nothing else.
 
 The `.xpi` and the `.crx` are not interchangeable. They are different package
 formats with different signatures: the `.xpi` is inert in Chromium, and a
@@ -59,12 +61,26 @@ you can install it yourself.
 
 ![The Compare view showing one extension missing here, one only here, a version difference, and an enabled-state difference](docs/screenshots/compare.png)
 
-**Backs up bookmarks.** The whole tree goes to the same storage as your
-inventory. Restore is deliberately **additive**: it rebuilds the backup inside
-a new dated folder under Other Bookmarks and never moves, renames, or deletes
-anything you already have. If you don't want it, delete that one folder.
+**Backs up bookmarks, or just the folders you pick.** The tree goes to the same
+storage as your inventory. Tick which top-level folders are included and the
+rest never leaves the browser — useful when the remote is a repository someone
+else can read. Restore is deliberately **additive**: it rebuilds the backup
+inside a new dated folder under Other Bookmarks and never moves, renames, or
+deletes anything you already have. If you don't want it, delete that one
+folder. You can also restore part of a backup: tick a folder or a single
+bookmark in the tree and only that is recreated, still inside one dated folder.
 
-![The Bookmarks card showing a bookmark and folder count, a storage selector, and scan, pull, back up, and restore actions](docs/screenshots/bookmarks.png)
+![The Bookmarks card: a folder-inclusion list, storage selector, scan, pull, back up and restore actions, and a checkbox tree of the backup with one folder selected](docs/screenshots/bookmarks.png)
+
+**Backs up on a schedule.** Turn on automatic backups, choose hourly, every six
+hours, daily, or weekly, and pick the storage. The browser holds the timer and
+wakes Cairn when a backup is due, so it keeps working with the control center
+closed — though nothing runs while the browser itself is shut, and the next
+backup happens after it starts again. A scheduled run uses the same folder
+selection, and a failure — an expired token, a revoked permission — is
+reported on the page instead of being swallowed.
+
+![The Automation card with automatic backups enabled, an hourly interval, WebDAV as the target, and a successful last run](docs/screenshots/automation.png)
 
 **Keeps several devices in one document.** The multi-device format gives every
 browser its own section, so a second device syncing to the same remote adds to
@@ -104,7 +120,8 @@ Being clear about this is the point of the section.
 
 - Cairn never reads or copies browser profile databases or extension data
   directories. Everything comes from the browser's own APIs.
-- It requests three permissions: `management`, `storage`, and `bookmarks`.
+- It requests four permissions: `management`, `storage`, `bookmarks`, and
+  `alarms` — the last only so a scheduled backup can wake the extension.
   Access to your storage host is requested at runtime, only for the host you
   typed in.
 - Credentials stay in extension storage on your device and are sent only to
