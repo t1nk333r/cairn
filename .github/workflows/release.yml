@@ -53,6 +53,20 @@ jobs:
             exit 1
           }
 
+      # An .xpi whose manifest lost its update_url is an .xpi that never checks
+      # for a new version again, and the user cannot tell. tests/update-manifest
+      # already proves updates.json lists this version; this proves the shipped
+      # build actually points at it.
+      - name: Confirm the Firefox build points at the update manifest
+        run: |
+          EXPECTED=$(node -p "require('./package.json').cairn.updateManifestUrl")
+          ACTUAL=$(node -p "require('./.output/firefox-mv3/manifest.json').browser_specific_settings.gecko.update_url ?? ''")
+          echo "expected=$EXPECTED actual=$ACTUAL"
+          test -n "$ACTUAL" && test "$EXPECTED" = "$ACTUAL" || {
+            echo "::error::The Firefox manifest does not point at $EXPECTED, so this build would never auto-update."
+            exit 1
+          }
+
       - name: Package store archives
         run: |
           npm run zip
@@ -102,9 +116,9 @@ jobs:
             ## Install
 
             **Firefox** — download `cairn-*.xpi` and open it. Mozilla signs it
-            for self-hosting, so release Firefox installs it. Updates are
-            manual: Cairn publishes no update manifest, so install the next
-            `.xpi` the same way.
+            for self-hosting, so release Firefox installs it and then keeps it
+            updated automatically. Coming from 0.1.0? Reinstall once — that
+            build shipped without an update manifest and cannot update itself.
 
             **Chromium / Helium / Brave** — download `cairn-*-chrome.zip`,
             unzip it, then `chrome://extensions` → enable Developer mode →

@@ -1,4 +1,10 @@
+import { createRequire } from 'node:module';
 import { defineConfig } from 'wxt';
+
+// The add-on id, minimum Firefox, and update-manifest URL are shared with
+// scripts/update-manifest.mjs, which cannot import TypeScript. package.json is
+// the one file both can read.
+const { cairn } = createRequire(import.meta.url)('./package.json');
 
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
@@ -31,8 +37,12 @@ export default defineConfig({
       browser === 'firefox'
         ? {
             gecko: {
-              id: 'cairn@t1nk333r.dev',
-              strict_min_version: '128.0',
+              id: cairn.geckoId,
+              strict_min_version: cairn.strictMinVersion,
+              // Without this, Firefox never checks for a new version and every
+              // update is a manual reinstall. It must point at HTTPS-hosted
+              // JSON listing each release and its signed .xpi.
+              update_url: cairn.updateManifestUrl,
               data_collection_permissions: {
                 required: ['none'],
               },

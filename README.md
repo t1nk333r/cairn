@@ -22,8 +22,11 @@ Grab the files from the [latest release](https://github.com/t1nk333r/cairn/relea
 
 **Firefox** — download `cairn-<version>.xpi` and open it. Mozilla signs the
 file for self-hosting, so release Firefox installs it without complaint.
-Updates are manual for now: Cairn publishes no update manifest, so install the
-next `.xpi` the same way.
+Firefox then checks for new versions on its own and updates in place.
+
+If you installed **0.1.0**, reinstall once from the latest release. That build
+shipped without an update manifest, so it has nothing to check and will sit on
+0.1.0 forever. Every version after it updates itself.
 
 **Chromium, Helium, Brave, Edge** — download `cairn-<version>-chrome.zip`,
 unzip it, then go to `chrome://extensions`, turn on **Developer mode**, and
