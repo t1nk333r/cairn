@@ -11,11 +11,27 @@ import { captureInventory } from '../src/core/inventory';
 import type { BookmarkDocument } from '../src/core/bookmarks';
 import {
   captureLocalBookmarks,
+  listBookmarkRoots,
   loadBookmarks,
   loadBookmarksBaseline,
   restoreBookmarks,
   saveBookmarks,
 } from '../src/browser/bookmarks';
+import {
+  applyBackupSchedule,
+  BACKUP_ALARM_NAME,
+  runScheduledBackup,
+  type AlarmsApi,
+} from '../src/browser/backup-schedule';
+import type { BackupRunRecord, BackupTarget } from '../src/browser/backup-schedule-store';
+import {
+  loadBackupRun,
+  loadBackupSchedule,
+  loadIncludedRootIds,
+  saveBackupRun,
+  saveBackupSchedule,
+  saveIncludedRootIds,
+} from '../src/browser/backup-schedule-store';
 import {
   configureAndTestWebDav,
   pullWebDavInventory,
@@ -89,6 +105,85 @@ async function backUpStoredBookmarks(
 }
 
 /**
+ * Captures the tree the user actually chose to sync.
+ *
+ * The root filter is read here rather than passed in by the caller so every
+ * path — manual scan, scheduled backup — honours the same selection. A folder
+ * excluded from the backup must not reach a shared repository just because a
+ * different code path did the capturing.
+ */
+async function captureSelectedBookmarks(): Promise<BookmarkDocument> {
+  return captureLocalBookmarks({
+    api: browser.bookmarks,
+    device: await getDeviceObservation(),
+    includeRootIds: await loadIncludedRootIds(),
+  });
+}
+
+const BOOKMARK_BACKUP_WRITERS: Record<
+  BackupTarget,
+  (document: BookmarkDocument) => Promise<unknown>
+> = {
+  webdav: backUpWebDavBookmarks,
+  s3: backUpS3Bookmarks,
+  gitea: backUpGiteaBookmarks,
+  github: backUpGitHubBookmarks,
+};
+
+/**
+ * One scheduled backup: capture, write, record the outcome.
+ *
+ * The record is the only feedback channel an alarm has. Nothing is listening
+ * when it fires, so a failed token or a revoked host permission would
+ * otherwise be invisible and the user would assume backups are running.
+ */
+async function runBackupCycle(): Promise<BackupRunRecord> {
+  const schedule = await loadBackupSchedule();
+  const record = await runScheduledBackup({
+    schedule,
+    capture: async () => {
+      const document = await captureSelectedBookmarks();
+      await saveBookmarks(document);
+      return document;
+    },
+    backUp: (target, document) => BOOKMARK_BACKUP_WRITERS[target](document),
+  });
+  await saveBackupRun(record);
+  if (!record.ok) console.error('cairn: scheduled bookmark backup failed', record.error);
+  return record;
+}
+
+// `browser.alarms.create` is declared with four overloads, and TypeScript will
+// not match that against the narrow injectable shape the schedule module takes.
+// Adapting here keeps the module free of extension typings and testable with a
+// plain object.
+const ALARMS: AlarmsApi = {
+  create: (name, info) => browser.alarms.create(name, info),
+  clear: (name) => browser.alarms.clear(name),
+};
+
+async function reapplyStoredSchedule(): Promise<void> {
+  try {
+    await applyBackupSchedule(ALARMS, await loadBackupSchedule());
+  } catch (error: unknown) {
+    console.error('cairn: could not register the backup alarm', error);
+  }
+}
+
+/**
+ * The document a restore would actually recreate.
+ *
+ * Exposed to the options page as its own request so the selection tree it
+ * renders is addressing the same document this worker will restore. Index
+ * paths computed against a different tree would silently restore the wrong
+ * nodes, and duplicating the "pulled wins" rule in the page is how the two
+ * drift apart.
+ */
+async function resolveRestoreDocument(): Promise<BookmarkDocument | null> {
+  return (await loadBookmarksBaseline()) ?? (await loadBookmarks());
+}
+
+/**
  * One handler per request type, keyed by that type.
  *
  * The mapped type is the point: adding a member to `HsyncRequest` without a
@@ -116,24 +211,50 @@ const handlers: {
   },
 
   'bookmarks:capture': async () => {
-    const bookmarks = await captureLocalBookmarks({
-      api: browser.bookmarks,
-      device: await getDeviceObservation(),
-    });
+    const bookmarks = await captureSelectedBookmarks();
     await saveBookmarks(bookmarks);
     return { ok: true, bookmarks };
   },
   'bookmarks:get': async () => ({ ok: true, bookmarks: await loadBookmarks() }),
-  'bookmarks:restore': async () => {
-    // Prefer the pulled remote backup, so restore uses what the user just
-    // compared against rather than a stale local capture.
-    const document = (await loadBookmarksBaseline()) ?? (await loadBookmarks());
+  'bookmarks:restore': async (request) => {
+    const document = await resolveRestoreDocument();
     if (!document) throw new Error('Pull or scan a bookmark backup before restoring.');
     return {
       ok: true,
-      restore: await restoreBookmarks({ api: browser.bookmarks, document }),
+      restore: await restoreBookmarks({
+        api: browser.bookmarks,
+        document,
+        // Absent means the whole document, which is what the plain restore
+        // button sends.
+        select: request.select,
+      }),
     };
   },
+  'bookmarks:roots': async () => ({
+    ok: true,
+    roots: await listBookmarkRoots(browser.bookmarks),
+  }),
+  'bookmarks:restore-source': async () => ({ ok: true, bookmarks: await resolveRestoreDocument() }),
+  'bookmarks:selection-get': async () => ({ ok: true, rootIds: await loadIncludedRootIds() }),
+  'bookmarks:selection-set': async (request) => {
+    await saveIncludedRootIds(request.rootIds);
+    return { ok: true, rootIds: await loadIncludedRootIds() };
+  },
+
+  'schedule:get': async () => ({
+    ok: true,
+    schedule: await loadBackupSchedule(),
+    lastRun: await loadBackupRun(),
+  }),
+  'schedule:set': async (request) => {
+    await saveBackupSchedule(request.schedule);
+    const schedule = await loadBackupSchedule();
+    // Re-register immediately: a schedule the user just switched on must not
+    // wait for the next browser start to exist.
+    await applyBackupSchedule(ALARMS, schedule);
+    return { ok: true, schedule, lastRun: await loadBackupRun() };
+  },
+  'schedule:run-now': async () => ({ ok: true, run: await runBackupCycle() }),
 
   'webdav:get-config': async () => {
     const config = await loadWebDavConfig();
@@ -235,6 +356,18 @@ const handlers: {
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => {
     void captureAndSave();
+    // An update clears registered alarms, so the schedule has to be re-applied
+    // from storage or automatic backups stop silently after every upgrade.
+    void reapplyStoredSchedule();
+  });
+
+  browser.runtime.onStartup.addListener(() => {
+    void reapplyStoredSchedule();
+  });
+
+  browser.alarms.onAlarm.addListener((alarm: { name: string }) => {
+    if (alarm.name !== BACKUP_ALARM_NAME) return;
+    void runBackupCycle();
   });
 
   browser.action.onClicked.addListener(() => {

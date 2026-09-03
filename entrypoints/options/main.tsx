@@ -2,8 +2,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import type { HsyncRequest, HsyncResponse } from '../../src/browser/messages';
 import { diffInventories } from '../../src/core/diff';
-import { countBookmarks, type BookmarkDocument } from '../../src/core/bookmarks';
-import type { RestoreSummary } from '../../src/browser/bookmarks';
+import {
+  countBookmarks,
+  listBookmarkPaths,
+  type BookmarkDocument,
+  type BookmarkPathEntry,
+} from '../../src/core/bookmarks';
+import type { BookmarkRootSummary, RestoreSummary } from '../../src/browser/bookmarks';
+import {
+  BACKUP_INTERVALS,
+  DEFAULT_BACKUP_SCHEDULE,
+  type BackupRunRecord,
+  type BackupTarget,
+  type StoredBackupSchedule,
+} from '../../src/browser/backup-schedule-store';
 import {
   parseInventoryJson,
   serializeInventory,
@@ -67,6 +79,7 @@ const NAV_SECTIONS = [
   { id: 'extensions', label: 'Extensions' },
   { id: 'compare', label: 'Compare' },
   { id: 'bookmarks', label: 'Bookmarks' },
+  { id: 'automation', label: 'Automation' },
   { id: 'connections', label: 'Connections' },
 ] as const;
 
@@ -119,6 +132,18 @@ export function App() {
   const [bookmarks, setBookmarks] = useState<BookmarkDocument | null>(null);
   const [restoreSummary, setRestoreSummary] = useState<RestoreSummary | null>(null);
   const [bookmarkTarget, setBookmarkTarget] = useState<'webdav' | 's3' | 'gitea' | 'github'>('webdav');
+  // The tree a restore would actually recreate, fetched from the worker rather
+  // than assumed, because the selection paths below address exactly it.
+  const [restoreSource, setRestoreSource] = useState<BookmarkDocument | null>(null);
+  // Index paths joined with '.', so a Set of primitives can drive the
+  // checkboxes. Converted back to number[][] when the request is sent.
+  const [selectedPaths, setSelectedPaths] = useState<readonly string[]>([]);
+  const [roots, setRoots] = useState<BookmarkRootSummary[]>([]);
+  // Empty means every root, which is what a fresh install has: the filter is
+  // opt-in, never a way to back up nothing by accident.
+  const [includedRootIds, setIncludedRootIds] = useState<readonly string[]>([]);
+  const [schedule, setSchedule] = useState<StoredBackupSchedule>(DEFAULT_BACKUP_SCHEDULE);
+  const [lastRun, setLastRun] = useState<BackupRunRecord | null>(null);
   const [webdavSaved, setWebdavSaved] = useState(false);
   const [s3Saved, setS3Saved] = useState(false);
   const [giteaSaved, setGiteaSaved] = useState(false);
@@ -181,6 +206,33 @@ export function App() {
     });
   }, []);
 
+  // Refetched after every bookmark action, not just at mount: a scan or a pull
+  // changes which document a restore would use, and a stale tree here would
+  // mean selection paths pointing into the wrong document.
+  const loadRestoreSource = useCallback(async () => {
+    const response = await sendRequest({ type: 'bookmarks:restore-source' });
+    if (response.ok && 'bookmarks' in response) {
+      setRestoreSource(response.bookmarks);
+      setSelectedPaths([]);
+    }
+  }, []);
+
+  useEffect(() => void loadRestoreSource(), [loadRestoreSource]);
+
+  useEffect(() => {
+    void sendRequest({ type: 'bookmarks:roots' }).then((response) => {
+      if (response.ok && 'roots' in response) setRoots(response.roots);
+    });
+    void sendRequest({ type: 'bookmarks:selection-get' }).then((response) => {
+      if (response.ok && 'rootIds' in response) setIncludedRootIds(response.rootIds);
+    });
+    void sendRequest({ type: 'schedule:get' }).then((response) => {
+      if (!response.ok || !('schedule' in response)) return;
+      setSchedule(response.schedule);
+      setLastRun(response.lastRun);
+    });
+  }, []);
+
   useEffect(() => {
     void sendRequest({ type: 'baseline:get' }).then((response) => {
       if (response.ok && 'inventory' in response) setBaseline(response.inventory);
@@ -237,6 +289,13 @@ export function App() {
   const comparison = useMemo(
     () => (inventory && baseline ? diffInventories(inventory, baseline) : null),
     [inventory, baseline],
+  );
+
+  // Flattened once per document: the checkbox tree and the request payload
+  // must address nodes by the same index paths.
+  const restoreEntries: BookmarkPathEntry[] = useMemo(
+    () => (restoreSource ? listBookmarkPaths(restoreSource.roots) : []),
+    [restoreSource],
   );
 
   // The difference lists compare "here" against the imported or pulled
@@ -444,12 +503,78 @@ export function App() {
           `Restored ${response.restore.createdBookmarks} bookmarks into "${response.restore.folderTitle}".`,
         );
       }
+      await loadRestoreSource();
     });
   };
 
-  const restoreBookmarkBackup = async () => {
+  const restoreBookmarkBackup = async (select?: readonly (readonly number[])[]) => {
     if (!window.confirm(RESTORE_CONFIRM_MESSAGE)) return;
-    await runBookmarkRequest({ type: 'bookmarks:restore' }, 'bookmarks-restore');
+    await runBookmarkRequest({ type: 'bookmarks:restore', select }, 'bookmarks-restore');
+  };
+
+  // Every root selected is stored as an empty list, keeping "empty means all"
+  // as the single meaning of an unfiltered backup rather than a second
+  // representation that drifts when a browser gains a root.
+  const setRootSelection = async (ids: readonly string[]) => {
+    const next = ids.length === roots.length ? [] : ids;
+    setIncludedRootIds(next);
+    const response = await sendRequest({ type: 'bookmarks:selection-set', rootIds: next });
+    if (!response.ok) {
+      setError(response.error);
+      return;
+    }
+    if ('rootIds' in response) setIncludedRootIds(response.rootIds);
+  };
+
+  const toggleRoot = async (id: string) => {
+    const selected = includedRootIds.length === 0 ? roots.map((root) => root.id) : includedRootIds;
+    const next = selected.includes(id)
+      ? selected.filter((current) => current !== id)
+      : [...selected, id];
+    // Unticking the last folder would store an empty list, which means "all"
+    // — the opposite of what the click asked for. Refuse it instead.
+    if (next.length === 0) {
+      setError('Keep at least one folder in the backup, or switch backups off.');
+      return;
+    }
+    setError(null);
+    await setRootSelection(next);
+  };
+
+  const toggleRestorePath = (key: string) => {
+    setSelectedPaths((current) =>
+      current.includes(key) ? current.filter((path) => path !== key) : [...current, key],
+    );
+  };
+
+  const saveSchedule = async (next: StoredBackupSchedule) => {
+    setSchedule(next);
+    await withRemoteBusy('schedule-save', async () => {
+      const response = await sendRequest({ type: 'schedule:set', schedule: next });
+      if (!response.ok) throw new Error(response.error);
+      if ('schedule' in response) {
+        setSchedule(response.schedule);
+        setLastRun(response.lastRun);
+      }
+      setNotice(
+        next.enabled
+          ? 'Automatic bookmark backups are on.'
+          : 'Automatic bookmark backups are off.',
+      );
+    });
+  };
+
+  const runScheduleNow = async () => {
+    await withRemoteBusy('schedule-run', async () => {
+      const response = await sendRequest({ type: 'schedule:run-now' });
+      if (!response.ok) throw new Error(response.error);
+      if (!('run' in response)) return;
+      setLastRun(response.run);
+      // The worker reports a failed run rather than throwing, so surface it
+      // here instead of letting a red banner go missing.
+      if (!response.run.ok) throw new Error(response.run.error ?? 'The backup failed.');
+      setNotice('Backed up now.');
+    });
   };
 
   const clearBaseline = async () => {
@@ -635,6 +760,34 @@ export function App() {
                 <option value="github">GitHub</option>
               </select>
             </label>
+            <div className="wide-field">
+              <span className="field-label">Folders included in backups</span>
+              {roots.length === 0 ? (
+                <p className="cors-note">The browser reported no bookmark folders.</p>
+              ) : (
+                <div className="root-list">
+                  {roots.map((root) => (
+                    <label key={root.id} className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={includedRootIds.length === 0 || includedRootIds.includes(root.id)}
+                        disabled={remoteBusy !== null}
+                        onChange={() => void toggleRoot(root.id)}
+                      />
+                      <span>{root.title || 'Untitled folder'}</span>
+                      <small>
+                        {root.counts.bookmarks} bookmarks · {root.counts.folders} folders
+                      </small>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="cors-note">
+                {includedRootIds.length === 0
+                  ? 'Everything is backed up. Untick a folder to keep it out of your remote storage.'
+                  : 'Only the ticked folders are captured, by hand and on a schedule.'}
+              </p>
+            </div>
             {restoreSummary && (
               <p className="cors-note wide-field">
                 Last restore created {restoreSummary.createdBookmarks} bookmarks and{' '}
@@ -683,6 +836,140 @@ export function App() {
                 {remoteBusy === 'bookmarks-restore' ? 'Restoring…' : 'Restore into new folder'}
               </button>
             </div>
+            {restoreEntries.length > 0 && (
+              <div className="wide-field">
+                <span className="field-label">Or restore only part of the backup</span>
+                <div className="restore-tree">
+                  {restoreEntries.map((entry) => {
+                    const key = entry.path.join('.');
+                    return (
+                      <label
+                        key={key}
+                        className="checkbox-field"
+                        style={{ marginLeft: `${entry.depth * 18}px` }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedPaths.includes(key)}
+                          disabled={remoteBusy !== null}
+                          onChange={() => toggleRestorePath(key)}
+                        />
+                        <span>{entry.node.title || entry.node.url || 'Untitled'}</span>
+                        {entry.node.children ? (
+                          <small>{countBookmarks([entry.node]).bookmarks} bookmarks</small>
+                        ) : null}
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="button-row">
+                  <button
+                    className="secondary-button"
+                    disabled={selectedPaths.length === 0 || remoteBusy !== null}
+                    onClick={() =>
+                      void restoreBookmarkBackup(
+                        selectedPaths.map((key) => key.split('.').map(Number)),
+                      )
+                    }
+                  >
+                    {remoteBusy === 'bookmarks-restore'
+                      ? 'Restoring…'
+                      : `Restore ${selectedPaths.length} selected`}
+                  </button>
+                </div>
+                <p className="cors-note">
+                  Ticking a folder restores everything inside it. Whatever you pick lands in
+                  one new dated folder, exactly like a full restore.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="compare-card" id="automation">
+          <div className="section-heading">
+            <div>
+              <h2>Automation</h2>
+              <p>
+                Back up bookmarks on a schedule without opening this page. The browser
+                wakes Cairn when a backup is due, so nothing runs while the browser is
+                closed — the next one happens after it starts again.
+              </p>
+            </div>
+            <span className="connection-status">
+              {schedule.enabled
+                ? BACKUP_INTERVALS.find((interval) => interval.minutes === schedule.everyMinutes)
+                    ?.label ?? 'Scheduled'
+                : 'Off'}
+            </span>
+          </div>
+          <div className="connection-content">
+            <label className="checkbox-field wide-field">
+              <input
+                type="checkbox"
+                checked={schedule.enabled}
+                disabled={remoteBusy !== null}
+                onChange={(event) =>
+                  void saveSchedule({ ...schedule, enabled: event.target.checked })
+                }
+              />
+              <span>Back up bookmarks automatically</span>
+            </label>
+            <label>
+              <span>How often</span>
+              <select
+                value={schedule.everyMinutes}
+                disabled={remoteBusy !== null}
+                onChange={(event) =>
+                  void saveSchedule({ ...schedule, everyMinutes: Number(event.target.value) })
+                }
+              >
+                {BACKUP_INTERVALS.map((interval) => (
+                  <option key={interval.minutes} value={interval.minutes}>
+                    {interval.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Back up to</span>
+              <select
+                value={schedule.target}
+                disabled={remoteBusy !== null}
+                onChange={(event) =>
+                  void saveSchedule({
+                    ...schedule,
+                    target: event.target.value as BackupTarget,
+                  })
+                }
+              >
+                <option value="webdav">WebDAV</option>
+                <option value="s3">S3-compatible</option>
+                <option value="gitea">Gitea</option>
+                <option value="github">GitHub</option>
+              </select>
+            </label>
+            {lastRun && (
+              <p className="cors-note wide-field">
+                {lastRun.ok
+                  ? `Last automatic backup succeeded ${new Date(lastRun.at).toLocaleString()}.`
+                  : `Last attempt ${new Date(lastRun.at).toLocaleString()} failed: ${lastRun.error ?? 'unknown error'}`}
+              </p>
+            )}
+            <div className="button-row">
+              <button
+                className="secondary-button"
+                disabled={remoteBusy !== null}
+                onClick={() => void runScheduleNow()}
+              >
+                {remoteBusy === 'schedule-run' ? 'Backing up…' : 'Back up now'}
+              </button>
+            </div>
+            <p className="cors-note wide-field">
+              A scheduled backup uses the folder selection above and needs the chosen
+              connection already saved, with its host permission granted. Failures are
+              reported here rather than thrown away.
+            </p>
           </div>
         </section>
 

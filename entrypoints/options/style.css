@@ -87,6 +87,15 @@ h2 { font-size: 15px; margin: 0 0 4px; }
 .connection-footer button, .button-row button { border: 0; border-radius: 8px; padding: 9px 13px; background: #315efb; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .connection-footer button:disabled, .button-row button:disabled { opacity: .55; cursor: not-allowed; }
 .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Selection lists: bookmark roots to include in a backup, and the tree of a
+   pulled backup to restore from. The tree is capped and scrolls because a real
+   bookmark collection is hundreds of rows and would otherwise bury the
+   buttons under it. */
+.field-label { display: block; margin-bottom: 8px; color: #5f6a7d; font-size: 11px; font-weight: 700; }
+.root-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.restore-tree { max-height: 320px; overflow-y: auto; padding: 10px 12px; border: 1px solid #d8deea; border-radius: 8px; background: #f8f9fb; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.root-list .checkbox-field small, .restore-tree .checkbox-field small { color: #8a94a6; font-size: 10px; }
+.restore-tree .checkbox-field span { font-weight: 400; font-size: 12px; }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 178px 1fr; }
@@ -106,6 +115,7 @@ h2 { font-size: 15px; margin: 0 0 4px; }
   .compare-summary div { background: #202839; }
   .difference-group article { border-color: #2b3547; }
   .connection-content input, .connection-content select { background: #151c29; border-color: #343e50; }
+  .restore-tree { background: #151c29; border-color: #343e50; }
   .cors-note { background: #202839; }
   .connection-footer { border-color: #2b3547; }
   .success-banner { background: #143424; border-color: #286245; color: #82dca9; }

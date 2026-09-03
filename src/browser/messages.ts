@@ -1,5 +1,9 @@
-import type { BookmarkDocument } from '../core/bookmarks';
-import type { RestoreSummary } from './bookmarks';
+import type { BookmarkDocument, BookmarkPath } from '../core/bookmarks';
+import type { BookmarkRootSummary, RestoreSummary } from './bookmarks';
+import type {
+  BackupRunRecord,
+  StoredBackupSchedule,
+} from './backup-schedule-store';
 import type { InventoryDocument } from '../core/inventory';
 import type { StoredWebDavConfig } from './webdav-store';
 import type { StoredS3Config } from './s3-store';
@@ -49,7 +53,14 @@ export type HsyncRequest =
   | { type: 'github:upgrade' }
   | { type: 'bookmarks:capture' }
   | { type: 'bookmarks:get' }
-  | { type: 'bookmarks:restore' }
+  | { type: 'bookmarks:restore'; select?: readonly BookmarkPath[] | undefined }
+  | { type: 'bookmarks:roots' }
+  | { type: 'bookmarks:restore-source' }
+  | { type: 'bookmarks:selection-get' }
+  | { type: 'bookmarks:selection-set'; rootIds: readonly string[] }
+  | { type: 'schedule:get' }
+  | { type: 'schedule:set'; schedule: StoredBackupSchedule }
+  | { type: 'schedule:run-now' }
   | { type: 'webdav:bookmarks-pull' }
   | { type: 'webdav:bookmarks-backup' }
   | { type: 's3:bookmarks-pull' }
@@ -68,5 +79,9 @@ export type HsyncResponse =
   | { ok: true; s3Config: StoredS3Config | null }
   | { ok: true; giteaConfig: StoredGiteaConfig | null }
   | { ok: true; githubConfig: StoredGitHubConfig | null }
+  | { ok: true; roots: BookmarkRootSummary[] }
+  | { ok: true; rootIds: string[] }
+  | { ok: true; schedule: StoredBackupSchedule; lastRun: BackupRunRecord | null }
+  | { ok: true; run: BackupRunRecord }
   | { ok: true }
   | { ok: false; error: string };
