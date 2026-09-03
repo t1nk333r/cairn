@@ -43,7 +43,8 @@ export interface BookmarkCounts {
   folders: number;
 }
 
-function normalizeNode(node: BookmarkTreeNodeLike): BookmarkNode {
+/** Normalizes one node and its subtree, without any super-root unwrapping. */
+export function normalizeBookmarkNode(node: BookmarkTreeNodeLike): BookmarkNode {
   const title = (node.title ?? '').trim();
   const addedAt =
     typeof node.dateAdded === 'number' && Number.isFinite(node.dateAdded)
@@ -56,7 +57,7 @@ function normalizeNode(node: BookmarkTreeNodeLike): BookmarkNode {
     return {
       title,
       ...(addedAt !== undefined ? { addedAt } : {}),
-      children: (node.children ?? []).map(normalizeNode),
+      children: (node.children ?? []).map(normalizeBookmarkNode),
     };
   }
 
@@ -76,7 +77,7 @@ export function normalizeBookmarkTree(
   const roots = tree.length === 1 && tree[0]?.url === undefined
     ? (tree[0]?.children ?? [])
     : tree;
-  return roots.map(normalizeNode);
+  return roots.map(normalizeBookmarkNode);
 }
 
 export function captureBookmarks(input: {
@@ -108,6 +109,107 @@ export function countBookmarks(nodes: BookmarkNode[]): BookmarkCounts {
   };
   walk(nodes);
   return { bookmarks, folders };
+}
+
+/** Child indexes from the document's root list down to one node. Index-based, not title-based: sibling titles are not unique. */
+export type BookmarkPath = readonly number[];
+
+export interface BookmarkPathEntry {
+  path: number[];
+  node: BookmarkNode;
+  /** 0 for a root folder. */
+  depth: number;
+}
+
+/** Depth-first listing of every node, each with the path that addresses it. */
+export function listBookmarkPaths(roots: BookmarkNode[]): BookmarkPathEntry[] {
+  const entries: BookmarkPathEntry[] = [];
+  // Parents before children, so a caller rendering a tree can indent by depth
+  // without buffering.
+  const walk = (nodes: BookmarkNode[], prefix: readonly number[], depth: number) => {
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index];
+      if (node === undefined) continue;
+      const path = [...prefix, index];
+      entries.push({ path, node, depth });
+      if (node.children !== undefined) walk(node.children, path, depth + 1);
+    }
+  };
+  walk(roots, [], 0);
+  return entries;
+}
+
+interface SelectionMark {
+  /** The whole subtree here is selected, which makes any child mark redundant. */
+  whole: boolean;
+  children: Map<number, SelectionMark>;
+}
+
+/**
+ * Keeps only the addressed nodes and their subtrees, preserving original order
+ * and the folder nesting above each selection. Selecting a folder selects its
+ * whole subtree; if both a folder and something inside it are addressed, the
+ * folder wins. Throws InventoryFormatError on an empty or out-of-range path.
+ */
+export function selectBookmarkNodes(
+  roots: BookmarkNode[],
+  paths: readonly BookmarkPath[],
+): BookmarkNode[] {
+  const selection: SelectionMark = { whole: false, children: new Map() };
+
+  for (const path of paths) {
+    if (path.length === 0) {
+      throw new InventoryFormatError(
+        'invalid_inventory',
+        'A bookmark selection needs at least one index; the document root cannot be selected.',
+      );
+    }
+    let siblings: BookmarkNode[] | undefined = roots;
+    let mark = selection;
+    for (let step = 0; step < path.length; step += 1) {
+      const index = path[step];
+      // One lookup rejects every bad index at once: out of range, negative,
+      // fractional, or a step past a bookmark, which has no children. Dropping
+      // such a path instead would mean a restore that quietly omits data.
+      // Annotated because `siblings` is reassigned from `node.children` below,
+      // which TypeScript would otherwise treat as circular inference.
+      const node: BookmarkNode | undefined =
+        index === undefined ? undefined : siblings?.[index];
+      if (index === undefined || node === undefined) {
+        throw new InventoryFormatError(
+          'invalid_inventory',
+          `Bookmark selection [${path.join(', ')}] does not address a node in this backup.`,
+        );
+      }
+      let next = mark.children.get(index);
+      if (next === undefined) {
+        next = { whole: false, children: new Map() };
+        mark.children.set(index, next);
+      }
+      mark = next;
+      siblings = node.children;
+    }
+    mark.whole = true;
+  }
+
+  const build = (nodes: BookmarkNode[], mark: SelectionMark): BookmarkNode[] => {
+    const kept: BookmarkNode[] = [];
+    // Iterating the source keeps sibling order regardless of the order paths
+    // arrived in.
+    for (let index = 0; index < nodes.length; index += 1) {
+      const child = mark.children.get(index);
+      const node = nodes[index];
+      if (child === undefined || node === undefined) continue;
+      if (child.whole) {
+        kept.push(node);
+        continue;
+      }
+      kept.push({ ...node, children: build(node.children ?? [], child) });
+    }
+    return kept;
+  };
+
+  return build(roots, selection);
 }
 
 function isBookmarkNode(value: unknown): value is BookmarkNode {
