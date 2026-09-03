@@ -24,7 +24,9 @@ export default defineConfig({
     // version is intentionally omitted: WXT derives it from package.json, so
     // `npm version` is the single bump. A mismatch would fail the release
     // workflow's tag guard.
-    permissions: ['management', 'storage', 'bookmarks'],
+    // `alarms` drives the scheduled bookmark backup. A timer created in the
+    // service worker would not survive MV3 idle teardown.
+    permissions: ['management', 'storage', 'bookmarks', 'alarms'],
     action: {
       default_title: 'Cairn',
     },
