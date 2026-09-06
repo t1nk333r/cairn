@@ -20,6 +20,7 @@ import {
 import {
   applyBackupSchedule,
   BACKUP_ALARM_NAME,
+  ensureBackupSchedule,
   runScheduledBackup,
   type AlarmsApi,
 } from '../src/browser/backup-schedule';
@@ -95,29 +96,40 @@ function scheduleCapture() {
   }, CAPTURE_DEBOUNCE_MS);
 }
 
-async function backUpStoredBookmarks(
+/**
+ * Uploads a freshly captured tree, never a stored one.
+ *
+ * Reading the last saved capture leaked excluded folders: a user who scanned,
+ * then unticked a folder to keep it out of a shared remote, uploaded the
+ * pre-filter document that was still sitting in storage. Capturing here means
+ * the folder selection in force at the moment of the click is the one that
+ * decides what leaves the browser, and it is the same rule the scheduled path
+ * follows.
+ */
+async function backUpFreshBookmarks(
   write: (document: BookmarkDocument) => Promise<unknown>,
 ): Promise<HsyncResponse> {
-  const bookmarks = await loadBookmarks();
-  if (!bookmarks) throw new Error('Scan bookmarks before backing them up.');
+  const bookmarks = await captureAndSaveBookmarks();
   await write(bookmarks);
   return { ok: true, bookmarks };
 }
 
 /**
- * Captures the tree the user actually chose to sync.
+ * Captures the tree the user actually chose to sync, and stores it.
  *
  * The root filter is read here rather than passed in by the caller so every
- * path — manual scan, scheduled backup — honours the same selection. A folder
- * excluded from the backup must not reach a shared repository just because a
- * different code path did the capturing.
+ * path — manual scan, manual backup, scheduled backup — honours the same
+ * selection. A folder excluded from the backup must not reach a shared
+ * repository just because a different code path did the capturing.
  */
-async function captureSelectedBookmarks(): Promise<BookmarkDocument> {
-  return captureLocalBookmarks({
+async function captureAndSaveBookmarks(): Promise<BookmarkDocument> {
+  const document = await captureLocalBookmarks({
     api: browser.bookmarks,
     device: await getDeviceObservation(),
     includeRootIds: await loadIncludedRootIds(),
   });
+  await saveBookmarks(document);
+  return document;
 }
 
 const BOOKMARK_BACKUP_WRITERS: Record<
@@ -141,11 +153,7 @@ async function runBackupCycle(): Promise<BackupRunRecord> {
   const schedule = await loadBackupSchedule();
   const record = await runScheduledBackup({
     schedule,
-    capture: async () => {
-      const document = await captureSelectedBookmarks();
-      await saveBookmarks(document);
-      return document;
-    },
+    capture: captureAndSaveBookmarks,
     backUp: (target, document) => BOOKMARK_BACKUP_WRITERS[target](document),
   });
   await saveBackupRun(record);
@@ -159,12 +167,15 @@ async function runBackupCycle(): Promise<BackupRunRecord> {
 // plain object.
 const ALARMS: AlarmsApi = {
   create: (name, info) => browser.alarms.create(name, info),
+  get: (name) => browser.alarms.get(name),
   clear: (name) => browser.alarms.clear(name),
 };
 
+// Install and startup re-register without disturbing an alarm that is already
+// counting down correctly; only a deliberate settings change resets it.
 async function reapplyStoredSchedule(): Promise<void> {
   try {
-    await applyBackupSchedule(ALARMS, await loadBackupSchedule());
+    await ensureBackupSchedule(ALARMS, await loadBackupSchedule());
   } catch (error: unknown) {
     console.error('cairn: could not register the backup alarm', error);
   }
@@ -210,11 +221,7 @@ const handlers: {
     return { ok: true };
   },
 
-  'bookmarks:capture': async () => {
-    const bookmarks = await captureSelectedBookmarks();
-    await saveBookmarks(bookmarks);
-    return { ok: true, bookmarks };
-  },
+  'bookmarks:capture': async () => ({ ok: true, bookmarks: await captureAndSaveBookmarks() }),
   'bookmarks:get': async () => ({ ok: true, bookmarks: await loadBookmarks() }),
   'bookmarks:restore': async (request) => {
     const document = await resolveRestoreDocument();
@@ -273,7 +280,7 @@ const handlers: {
   'webdav:upload': async () => ({ ok: true, inventory: await uploadWebDavInventory() }),
   'webdav:upgrade': async () => ({ ok: true, ...(await upgradeWebDavInventory()) }),
   'webdav:bookmarks-pull': async () => ({ ok: true, bookmarks: await pullWebDavBookmarks() }),
-  'webdav:bookmarks-backup': async () => backUpStoredBookmarks(backUpWebDavBookmarks),
+  'webdav:bookmarks-backup': async () => backUpFreshBookmarks(backUpWebDavBookmarks),
 
   's3:get-config': async () => {
     const config = await loadS3Config();
@@ -300,7 +307,7 @@ const handlers: {
   's3:pull': async () => ({ ok: true, inventory: await pullS3Inventory() }),
   's3:upload': async () => ({ ok: true, inventory: await uploadS3Inventory() }),
   's3:bookmarks-pull': async () => ({ ok: true, bookmarks: await pullS3Bookmarks() }),
-  's3:bookmarks-backup': async () => backUpStoredBookmarks(backUpS3Bookmarks),
+  's3:bookmarks-backup': async () => backUpFreshBookmarks(backUpS3Bookmarks),
 
   'gitea:get-config': async () => {
     const config = await loadGiteaConfig();
@@ -325,7 +332,7 @@ const handlers: {
   'gitea:upload': async () => ({ ok: true, inventory: await uploadGiteaInventory() }),
   'gitea:upgrade': async () => ({ ok: true, ...(await upgradeGiteaInventory()) }),
   'gitea:bookmarks-pull': async () => ({ ok: true, bookmarks: await pullGiteaBookmarks() }),
-  'gitea:bookmarks-backup': async () => backUpStoredBookmarks(backUpGiteaBookmarks),
+  'gitea:bookmarks-backup': async () => backUpFreshBookmarks(backUpGiteaBookmarks),
 
   'github:get-config': async () => {
     const config = await loadGitHubConfig();
@@ -350,7 +357,7 @@ const handlers: {
   'github:upload': async () => ({ ok: true, inventory: await uploadGitHubInventory() }),
   'github:upgrade': async () => ({ ok: true, ...(await upgradeGitHubInventory()) }),
   'github:bookmarks-pull': async () => ({ ok: true, bookmarks: await pullGitHubBookmarks() }),
-  'github:bookmarks-backup': async () => backUpStoredBookmarks(backUpGitHubBookmarks),
+  'github:bookmarks-backup': async () => backUpFreshBookmarks(backUpGitHubBookmarks),
 };
 
 export default defineBackground(() => {

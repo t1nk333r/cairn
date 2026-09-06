@@ -817,8 +817,10 @@ export function App() {
               >
                 {remoteBusy === 'bookmarks-pull' ? 'Pulling…' : 'Pull backup'}
               </button>
+              {/* No prior scan needed: the backup captures fresh, so gating on
+                  a stored one only invited uploading a stale tree. */}
               <button
-                disabled={!bookmarks || remoteBusy !== null}
+                disabled={remoteBusy !== null}
                 onClick={() =>
                   void runBookmarkRequest(
                     { type: `${bookmarkTarget}:bookmarks-backup` } as HsyncRequest,
