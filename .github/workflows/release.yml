@@ -75,18 +75,21 @@ jobs:
       # A CRX is only signable with the private key that defines the extension
       # id, and that key is deliberately not held in Actions secrets: it is the
       # permanent extension identity, and leaking it means a new id and a
-      # reinstall for every user. So this step normally does not run: the
+      # reinstall for every user. So this step normally does not run — the
       # maintainer signs locally and attaches the .crx with
-      # `npm run release:crx`, which recomputes the extension id from the key
-      # and refuses to pack anything under a different one.
+      # `npm run release:crx`. If the secret is ever added, this goes through
+      # that same pinned path rather than fetching a packer at run time, so the
+      # id guard still applies while CI is handling the key.
       - name: Sign the CRX
         if: env.HAS_CRX_KEY == 'true'
         env:
           CRX_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
         run: |
-          printf '%s' "$CRX_KEY" > /tmp/cairn.pem
-          npx --yes crx3 -p /tmp/cairn.pem -o ".output/cairn-${TAG#v}.crx" .output/chrome-mv3
-          shred -u /tmp/cairn.pem
+          mkdir -p keys
+          printf '%s' "$CRX_KEY" > keys/cairn.pem
+          npm run pack:crx
+          shred -u keys/cairn.pem
+          cp "dist/cairn-${TAG#v}.crx" ".output/cairn-${TAG#v}.crx"
 
       # Mozilla-signed XPI. This is the one artifact a user can genuinely
       # click and install: AMO signs unlisted add-ons for self-hosting, and

@@ -9,10 +9,22 @@ const { cairn } = createRequire(import.meta.url)('./package.json');
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   zip: {
-    // The Firefox sources archive goes to AMO reviewers. Ship what is needed
-    // to reproduce the build; leave out maintainer notes that are not part of
-    // the product and are not tracked in the repository anyway.
-    excludeSources: ['HANDOFF.md'],
+    // The sources archive does NOT respect .gitignore — WXT walks the working
+    // directory. Anything untracked but present locally ends up in the zip, so
+    // this list is a security control, not tidiness: `keys/cairn.pem` is the
+    // permanent extension identity, and a single shared archive would leak it
+    // for good. CI builds are clean only because those paths do not exist
+    // there; a maintainer running `npm run zip:firefox` is the exposed case.
+    excludeSources: [
+      'keys/**',
+      '**/*.pem',
+      'dist/**',
+      'plans/**',
+      'HANDOFF.md',
+      '.env*',
+      '**/amo.env*',
+      '.claude/**',
+    ],
   },
   manifestVersion: 3,
   targetBrowsers: ['chrome', 'firefox'],
