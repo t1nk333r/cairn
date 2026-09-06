@@ -1,5 +1,4 @@
 node_modules/
-dist/
 .output/
 .wxt/
 coverage/
@@ -16,6 +15,9 @@ coverage/
 plans/
 HANDOFF.md
 
-# generated packages and signing keys
+# Generated packages and signing keys. keys/cairn.pem defines the extension id
+# permanently, so wxt.config.ts has to exclude it from the sources archive too:
+# that archive is built by walking the working directory and never reads this
+# file.
 dist/
 keys/
