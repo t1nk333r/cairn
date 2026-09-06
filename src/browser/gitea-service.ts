@@ -2,11 +2,10 @@ import { GiteaBackend, normalizeGiteaConfig, type GiteaConfig } from '../backend
 import { bookmarksSibling } from './bookmarks-sync';
 import { createBackendService } from './backend-service';
 import {
-  loadGiteaBookmarksVersion,
+  giteaBookmarksVersion,
+  giteaInventoryVersion,
   loadGiteaConfig,
-  saveGiteaBookmarksVersion,
   saveGiteaConfig,
-  saveGiteaRemoteVersion,
 } from './gitea-store';
 
 export type { UpgradeInventoryResult } from './backend-service';
@@ -26,9 +25,9 @@ const service = createBackendService<GiteaConfig>({
     ...config,
     filePath: bookmarksSibling(config.filePath),
   }),
-  saveInventoryVersion: saveGiteaRemoteVersion,
-  loadBookmarksVersion: loadGiteaBookmarksVersion,
-  saveBookmarksVersion: saveGiteaBookmarksVersion,
+  saveInventoryVersion: giteaInventoryVersion.save,
+  loadBookmarksVersion: giteaBookmarksVersion.load,
+  saveBookmarksVersion: giteaBookmarksVersion.save,
   messages: {
     notConfigured: 'Configure Gitea first.',
     inventoryMissing: 'No Cairn inventory exists at this repository path yet.',

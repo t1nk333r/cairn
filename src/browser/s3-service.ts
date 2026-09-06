@@ -2,11 +2,10 @@ import { S3Backend, normalizeS3Config, type S3Config } from '../backends/s3';
 import { bookmarksSibling } from './bookmarks-sync';
 import { createBackendService } from './backend-service';
 import {
-  loadS3BookmarksVersion,
   loadS3Config,
-  saveS3BookmarksVersion,
+  s3BookmarksVersion,
+  s3InventoryVersion,
   saveS3Config,
-  saveS3RemoteVersion,
 } from './s3-store';
 
 export type { UpgradeInventoryResult } from './backend-service';
@@ -26,9 +25,9 @@ const service = createBackendService<S3Config>({
     ...config,
     objectKey: bookmarksSibling(config.objectKey),
   }),
-  saveInventoryVersion: saveS3RemoteVersion,
-  loadBookmarksVersion: loadS3BookmarksVersion,
-  saveBookmarksVersion: saveS3BookmarksVersion,
+  saveInventoryVersion: s3InventoryVersion.save,
+  loadBookmarksVersion: s3BookmarksVersion.load,
+  saveBookmarksVersion: s3BookmarksVersion.save,
   messages: {
     notConfigured: 'Configure S3 first.',
     inventoryMissing: 'No Cairn inventory exists at this S3 object yet.',

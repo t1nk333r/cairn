@@ -1,8 +1,11 @@
 import type { WebDavConfig } from '../backends/webdav';
+import { versionStore } from './version-store';
 
 const PUBLIC_CONFIG_KEY = 'webdavConfig';
 const SECRET_KEY = 'webdavPassword';
-const REMOTE_VERSION_KEY = 'webdavRemoteVersion';
+
+export const webdavInventoryVersion = versionStore('webdavRemoteVersion');
+export const webdavBookmarksVersion = versionStore('webdavBookmarksVersion');
 
 export interface StoredWebDavConfig {
   baseUrl: string;
@@ -27,7 +30,7 @@ export async function saveWebDavConfig(config: WebDavConfig): Promise<void> {
     [PUBLIC_CONFIG_KEY]: publicConfig,
     [SECRET_KEY]: config.password,
   });
-  if (endpointChanged) await browser.storage.local.remove(REMOTE_VERSION_KEY);
+  if (endpointChanged) await webdavInventoryVersion.clear();
 }
 
 export async function loadWebDavConfig(): Promise<WebDavConfig | null> {
@@ -44,28 +47,4 @@ export async function loadWebDavConfig(): Promise<WebDavConfig | null> {
     return null;
   }
   return { ...publicConfig, password };
-}
-
-export async function saveWebDavRemoteVersion(version: string): Promise<void> {
-  await browser.storage.local.set({ [REMOTE_VERSION_KEY]: version });
-}
-
-export async function loadWebDavRemoteVersion(): Promise<string | null> {
-  const stored = await browser.storage.local.get(REMOTE_VERSION_KEY);
-  return typeof stored[REMOTE_VERSION_KEY] === 'string'
-    ? stored[REMOTE_VERSION_KEY]
-    : null;
-}
-
-const BOOKMARKS_VERSION_webdavBookmarksVersion = 'webdavBookmarksVersion';
-
-export async function saveWebDavBookmarksVersion(version: string): Promise<void> {
-  await browser.storage.local.set({ [BOOKMARKS_VERSION_webdavBookmarksVersion]: version });
-}
-
-export async function loadWebDavBookmarksVersion(): Promise<string | null> {
-  const stored = await browser.storage.local.get(BOOKMARKS_VERSION_webdavBookmarksVersion);
-  return typeof stored[BOOKMARKS_VERSION_webdavBookmarksVersion] === 'string'
-    ? stored[BOOKMARKS_VERSION_webdavBookmarksVersion]
-    : null;
 }

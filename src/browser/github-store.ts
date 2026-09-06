@@ -1,8 +1,11 @@
 import type { GitHubConfig } from '../backends/github';
+import { versionStore } from './version-store';
 
 const PUBLIC_CONFIG_KEY = 'githubConfig';
 const TOKEN_KEY = 'githubToken';
-const REMOTE_VERSION_KEY = 'githubRemoteVersion';
+
+export const githubInventoryVersion = versionStore('githubRemoteVersion');
+export const githubBookmarksVersion = versionStore('githubBookmarksVersion');
 
 export interface StoredGitHubConfig {
   apiUrl: string;
@@ -26,7 +29,7 @@ export async function saveGitHubConfig(config: GitHubConfig): Promise<void> {
     ([key, value]) => previous[key as keyof StoredGitHubConfig] !== value,
   );
   await browser.storage.local.set({ [PUBLIC_CONFIG_KEY]: publicConfig, [TOKEN_KEY]: config.token });
-  if (targetChanged) await browser.storage.local.remove(REMOTE_VERSION_KEY);
+  if (targetChanged) await githubInventoryVersion.clear();
 }
 
 export async function loadGitHubConfig(): Promise<GitHubConfig | null> {
@@ -34,26 +37,4 @@ export async function loadGitHubConfig(): Promise<GitHubConfig | null> {
   const publicConfig = stored[PUBLIC_CONFIG_KEY] as StoredGitHubConfig | undefined;
   const token = stored[TOKEN_KEY];
   return publicConfig && typeof token === 'string' ? { ...publicConfig, token } : null;
-}
-
-export async function saveGitHubRemoteVersion(version: string): Promise<void> {
-  await browser.storage.local.set({ [REMOTE_VERSION_KEY]: version });
-}
-
-export async function loadGitHubRemoteVersion(): Promise<string | null> {
-  const stored = await browser.storage.local.get(REMOTE_VERSION_KEY);
-  return typeof stored[REMOTE_VERSION_KEY] === 'string' ? stored[REMOTE_VERSION_KEY] : null;
-}
-
-const BOOKMARKS_VERSION_githubBookmarksVersion = 'githubBookmarksVersion';
-
-export async function saveGitHubBookmarksVersion(version: string): Promise<void> {
-  await browser.storage.local.set({ [BOOKMARKS_VERSION_githubBookmarksVersion]: version });
-}
-
-export async function loadGitHubBookmarksVersion(): Promise<string | null> {
-  const stored = await browser.storage.local.get(BOOKMARKS_VERSION_githubBookmarksVersion);
-  return typeof stored[BOOKMARKS_VERSION_githubBookmarksVersion] === 'string'
-    ? stored[BOOKMARKS_VERSION_githubBookmarksVersion]
-    : null;
 }

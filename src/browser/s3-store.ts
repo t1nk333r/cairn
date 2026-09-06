@@ -1,8 +1,11 @@
 import type { S3Config } from '../backends/s3';
+import { versionStore } from './version-store';
 
 const PUBLIC_CONFIG_KEY = 's3Config';
 const SECRET_CONFIG_KEY = 's3Secrets';
-const REMOTE_VERSION_KEY = 's3RemoteVersion';
+
+export const s3InventoryVersion = versionStore('s3RemoteVersion');
+export const s3BookmarksVersion = versionStore('s3BookmarksVersion');
 
 export interface StoredS3Config {
   endpoint: string;
@@ -47,7 +50,7 @@ export async function saveS3Config(config: S3Config): Promise<void> {
     [PUBLIC_CONFIG_KEY]: publicConfig,
     [SECRET_CONFIG_KEY]: secrets,
   });
-  if (endpointChanged) await browser.storage.local.remove(REMOTE_VERSION_KEY);
+  if (endpointChanged) await s3InventoryVersion.clear();
 }
 
 export async function loadS3Config(): Promise<S3Config | null> {
@@ -70,28 +73,4 @@ export async function loadS3Config(): Promise<S3Config | null> {
     secretAccessKey: secrets.secretAccessKey,
     ...(secrets.sessionToken ? { sessionToken: secrets.sessionToken } : {}),
   };
-}
-
-export async function saveS3RemoteVersion(version: string): Promise<void> {
-  await browser.storage.local.set({ [REMOTE_VERSION_KEY]: version });
-}
-
-export async function loadS3RemoteVersion(): Promise<string | null> {
-  const stored = await browser.storage.local.get(REMOTE_VERSION_KEY);
-  return typeof stored[REMOTE_VERSION_KEY] === 'string'
-    ? stored[REMOTE_VERSION_KEY]
-    : null;
-}
-
-const BOOKMARKS_VERSION_s3BookmarksVersion = 's3BookmarksVersion';
-
-export async function saveS3BookmarksVersion(version: string): Promise<void> {
-  await browser.storage.local.set({ [BOOKMARKS_VERSION_s3BookmarksVersion]: version });
-}
-
-export async function loadS3BookmarksVersion(): Promise<string | null> {
-  const stored = await browser.storage.local.get(BOOKMARKS_VERSION_s3BookmarksVersion);
-  return typeof stored[BOOKMARKS_VERSION_s3BookmarksVersion] === 'string'
-    ? stored[BOOKMARKS_VERSION_s3BookmarksVersion]
-    : null;
 }

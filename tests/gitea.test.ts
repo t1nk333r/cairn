@@ -151,7 +151,7 @@ import {
   loadComparisonBaseline,
   saveInventory,
 } from '../src/browser/inventory-store';
-import { loadGiteaRemoteVersion, saveGiteaConfig } from '../src/browser/gitea-store';
+import { giteaInventoryVersion, saveGiteaConfig } from '../src/browser/gitea-store';
 import {
   pullGiteaInventory,
   upgradeGiteaInventory,
@@ -371,7 +371,7 @@ describe('Gitea service (v2 sync path)', () => {
     expect(inventory.extensions[0]?.version).toBe('2.0.0');
     // Baseline is the projection, not the raw v2 document.
     expect(await loadComparisonBaseline()).toEqual(inventory);
-    expect(await loadGiteaRemoteVersion()).toBe('v1');
+    expect(await giteaInventoryVersion.load()).toBe('v1');
   });
 
   it('pull from a v2 remote with no record for this device returns an empty projection', async () => {
@@ -393,7 +393,7 @@ describe('Gitea service (v2 sync path)', () => {
 
     expect(inventory).toEqual(v1);
     expect(await loadComparisonBaseline()).toEqual(v1);
-    expect(await loadGiteaRemoteVersion()).toBe('v1');
+    expect(await giteaInventoryVersion.load()).toBe('v1');
   });
 
   it('upload merges into the remote instead of overwriting the peer', async () => {
@@ -415,7 +415,7 @@ describe('Gitea service (v2 sync path)', () => {
     expect(inventory.schemaVersion).toBe(1);
     expect(inventory.device.id).toBe('laptop');
     expect(inventory.extensions.map((entry) => entry.name)).toContain('Laptop Tool');
-    expect(await loadGiteaRemoteVersion()).toBe('v2');
+    expect(await giteaInventoryVersion.load()).toBe('v2');
   });
 
   it('upload against a v1 remote surfaces the upgrade conflict and writes nothing', async () => {
@@ -453,7 +453,7 @@ describe('Gitea service (v2 sync path)', () => {
     expect(result.inventory.schemaVersion).toBe(1);
     expect(result.inventory.device.id).toBe('laptop');
     expect(result.inventory.extensions.map((entry) => entry.name)).toEqual(['Legacy']);
-    expect(await loadGiteaRemoteVersion()).toBe('v2');
+    expect(await giteaInventoryVersion.load()).toBe('v2');
   });
 
   it('upgrade against an already-v2 remote reports upgraded: false and writes nothing', async () => {
@@ -467,6 +467,6 @@ describe('Gitea service (v2 sync path)', () => {
     expect(result.inventory.extensions.map((entry) => entry.id)).toEqual([
       'shared-chromium-id',
     ]);
-    expect(await loadGiteaRemoteVersion()).toBe('v1');
+    expect(await giteaInventoryVersion.load()).toBe('v1');
   });
 });

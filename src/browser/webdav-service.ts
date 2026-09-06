@@ -2,11 +2,10 @@ import { WebDavBackend, normalizeWebDavConfig, type WebDavConfig } from '../back
 import { bookmarksSibling } from './bookmarks-sync';
 import { createBackendService } from './backend-service';
 import {
-  loadWebDavBookmarksVersion,
   loadWebDavConfig,
-  saveWebDavBookmarksVersion,
   saveWebDavConfig,
-  saveWebDavRemoteVersion,
+  webdavBookmarksVersion,
+  webdavInventoryVersion,
 } from './webdav-store';
 
 export type { UpgradeInventoryResult } from './backend-service';
@@ -26,9 +25,9 @@ const service = createBackendService<WebDavConfig>({
     ...config,
     fileName: bookmarksSibling(config.fileName),
   }),
-  saveInventoryVersion: saveWebDavRemoteVersion,
-  loadBookmarksVersion: loadWebDavBookmarksVersion,
-  saveBookmarksVersion: saveWebDavBookmarksVersion,
+  saveInventoryVersion: webdavInventoryVersion.save,
+  loadBookmarksVersion: webdavBookmarksVersion.load,
+  saveBookmarksVersion: webdavBookmarksVersion.save,
   messages: {
     notConfigured: 'Configure WebDAV first.',
     inventoryMissing: 'No Cairn inventory exists at this WebDAV location yet.',

@@ -2,11 +2,10 @@ import { GitHubBackend, normalizeGitHubConfig, type GitHubConfig } from '../back
 import { bookmarksSibling } from './bookmarks-sync';
 import { createBackendService } from './backend-service';
 import {
-  loadGitHubBookmarksVersion,
+  githubBookmarksVersion,
+  githubInventoryVersion,
   loadGitHubConfig,
-  saveGitHubBookmarksVersion,
   saveGitHubConfig,
-  saveGitHubRemoteVersion,
 } from './github-store';
 
 export type { UpgradeInventoryResult } from './backend-service';
@@ -26,9 +25,9 @@ const service = createBackendService<GitHubConfig>({
     ...config,
     filePath: bookmarksSibling(config.filePath),
   }),
-  saveInventoryVersion: saveGitHubRemoteVersion,
-  loadBookmarksVersion: loadGitHubBookmarksVersion,
-  saveBookmarksVersion: saveGitHubBookmarksVersion,
+  saveInventoryVersion: githubInventoryVersion.save,
+  loadBookmarksVersion: githubBookmarksVersion.load,
+  saveBookmarksVersion: githubBookmarksVersion.save,
   messages: {
     notConfigured: 'Configure GitHub first.',
     inventoryMissing: 'No Cairn inventory exists at this Git path yet.',
