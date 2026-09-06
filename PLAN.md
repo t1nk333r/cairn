@@ -44,6 +44,26 @@ never moves, renames, or deletes anything that already exists, so it cannot
 destroy data and needs no undo. Entries the browser refuses (bookmarklets,
 unsupported schemes) are counted and reported rather than aborting the restore.
 
+Which top-level folders are captured is the user's choice, and that choice is
+read at capture time on every path — manual scan, manual backup, scheduled
+backup. It is a confidentiality control, not a convenience: a folder excluded
+so it stays out of a shared repository must not reach that repository because
+some other code path assembled the document. An unreadable stored selection
+therefore fails the backup rather than falling back to "everything".
+
+A restore may address a subset of the backup by index path. Selecting a folder
+takes its whole subtree, and the result still lands in exactly one new dated
+folder, so the additive guarantee is unchanged.
+
+Backups can run on a schedule. The timer is a `browser.alarms` alarm, not a
+worker timer: an MV3 service worker is killed after roughly 30 seconds idle and
+would take an interval timer with it. Alarms survive a browser restart but are
+cleared by an extension update, so install and startup re-register — and must
+leave an already-correct alarm alone, because re-creating one restarts its
+countdown and a browser restarted more often than the interval would never
+reach a backup. Nothing is listening when an alarm fires, so the outcome of
+each run is recorded for the UI instead of thrown.
+
 ## Browser reality
 
 Both browser families expose an extension-management inventory API. Their IDs
@@ -168,7 +188,7 @@ over HTTPS. Its configuration is provider-neutral where APIs are compatible.
 Truly arbitrary Git remotes are **out of scope**. A native companion that
 would have carried them (Native Messaging, Git over SSH or HTTPS, and the OS
 credential store) was built and then removed on 2026-08-31 in favor of staying
-browser-only; see `HELIUM_SYNC_GIT_ADAPTATION.md`. Git support is provided
+browser-only; see `docs/HELIUM_SYNC_GIT_ADAPTATION.md`. Git support is provided
 through repository-host APIs only.
 
 ### Gitea
@@ -274,7 +294,7 @@ target S3-compatible service without losing concurrent changes.
 - Document the boundary between API-backed Git and arbitrary Git remotes.
 - ~~Scaffold the optional Go native companion and a versioned Native Messaging
   protocol.~~ **Removed 2026-08-31** (built, then deleted along with arbitrary
-  Git support — see `HELIUM_SYNC_GIT_ADAPTATION.md`).
+  Git support — see `docs/HELIUM_SYNC_GIT_ADAPTATION.md`).
 - ~~Add arbitrary Git clone/fetch/commit/push with SSH agent and HTTPS-token
   authentication.~~ **Removed 2026-08-31**, same reason.
 - ~~Store companion credentials in the OS keyring and ship registration helpers
@@ -285,7 +305,7 @@ Exit condition: every inventory change is auditable as a commit and concurrent
 writes produce a reviewable merge instead of overwrite. Cairn now supports
 Git only through repository-host APIs (Gitea, GitHub); arbitrary Git remotes
 and the native companion that would have carried them are not part of the
-product — see `HELIUM_SYNC_GIT_ADAPTATION.md`.
+product — see `docs/HELIUM_SYNC_GIT_ADAPTATION.md`.
 
 ### Milestone 4: guided restore and release hardening
 
@@ -297,6 +317,22 @@ product — see `HELIUM_SYNC_GIT_ADAPTATION.md`.
 
 Exit condition: a clean Chromium/Helium or Firefox profile can work through a
 remote inventory without Cairn claiming or attempting silent installation.
+
+### Shipped alongside, not in the original sequence
+
+Recorded here because the plan is the architecture document and these changed
+it:
+
+- **Bookmark folder selection** and **selective restore** (0.1.2), described
+  under "Bookmark backup" above.
+- **Scheduled bookmark backups** on `browser.alarms`, with the `alarms`
+  permission (0.1.2).
+- **Self-hosted Firefox updates** (0.1.1): `gecko.update_url` plus a generated
+  `updates.json`. Without it an installed build never discovers a later
+  release, so 0.1.0 installs are permanently stranded and must reinstall once.
+- **Distribution**: releases are cut by tag; the Mozilla-signed `.xpi` is built
+  and signed in CI, and the `.crx` is signed locally because the key that
+  defines the extension id is deliberately not held in CI.
 
 ## Test matrix
 

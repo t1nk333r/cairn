@@ -93,8 +93,8 @@ any device.
 ![The Git repository connection form, with API URL, owner, repository, branch, file path, and access token fields](docs/screenshots/connections.png)
 
 Setup guides: [Gitea](docs/GITEA_SETUP.md) ·
-[GitHub](docs/GITHUB_SETUP.md) · [S3](docs/S3_SETUP.md). WebDAV needs only a
-collection URL and credentials.
+[GitHub](docs/GITHUB_SETUP.md) · [WebDAV](docs/WEBDAV_SETUP.md) ·
+[S3](docs/S3_SETUP.md).
 
 Screenshots come from a scratch profile holding sample extensions, so the names
 above are placeholders rather than recommendations.
@@ -155,7 +155,8 @@ Releases are cut by tagging: `npm version <x.y.z> && git push --follow-tags`.
 The manifest version is derived from `package.json`, and CI refuses to publish
 a tag that disagrees with it.
 
-See [PLAN.md](PLAN.md) for the architecture and the delivery sequence.
+See [PLAN.md](PLAN.md) for the architecture and the delivery sequence, and
+[CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ## Credits and license
 
@@ -166,12 +167,12 @@ to anyone who runs a modified version as a network service.
 
 The product structure adapts proven ideas from the MIT-licensed
 [Bookmarkora](https://github.com/gygy/Bookmarkora); see
-[BOOKMARKORA_ADAPTATION.md](BOOKMARKORA_ADAPTATION.md) for the mapping and the
+[docs/BOOKMARKORA_ADAPTATION.md](docs/BOOKMARKORA_ADAPTATION.md) for the mapping and the
 limits of that reuse. An optional native companion for arbitrary-Git support,
 informed by the MIT-licensed
 [helium-sync-git](https://github.com/mdeloughry/helium-sync-git), was built and
 then removed on 2026-08-31 in favour of staying browser-only; see
-[HELIUM_SYNC_GIT_ADAPTATION.md](HELIUM_SYNC_GIT_ADAPTATION.md) for the
+[docs/HELIUM_SYNC_GIT_ADAPTATION.md](docs/HELIUM_SYNC_GIT_ADAPTATION.md) for the
 reasoning. Reused Bookmarkora code keeps its MIT notice in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

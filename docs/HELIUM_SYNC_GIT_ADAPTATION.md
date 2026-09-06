@@ -78,10 +78,10 @@ of audience, and it is the deliberate trade this reversal makes.
 ## Current model
 
 Cairn is now browser-only. It supports exactly the connection model that
-`BOOKMARKORA_ADAPTATION.md` describes: Git-host APIs, Gitea, WebDAV, and S3,
-all over HTTPS with tokens, all implemented under `src/backends/` and
-`src/browser/`. There is no native process, no OS keyring dependency, and no
-`nativeMessaging` permission.
+`BOOKMARKORA_ADAPTATION.md`, beside this file, describes: Git-host APIs,
+Gitea, WebDAV, and S3, all over HTTPS with tokens, all implemented under
+`src/backends/` and `src/browser/`. There is no native process, no OS keyring
+dependency, and no `nativeMessaging` permission.
 
 ## If this is ever reconsidered
 
