@@ -29,6 +29,8 @@ export interface BackupRunRecord {
 
 const LAST_RUN_KEY = 'bookmarkBackupLastRun';
 
+// Own-property lookup only: a plain `TARGETS[value]` would accept
+// 'constructor' and every other inherited key as a valid backend.
 const TARGETS: Record<string, true> = { webdav: true, s3: true, gitea: true, github: true };
 
 export const DEFAULT_BACKUP_SCHEDULE: StoredBackupSchedule = {
@@ -40,24 +42,26 @@ export const DEFAULT_BACKUP_SCHEDULE: StoredBackupSchedule = {
 /**
  * Normalizes whatever is in storage into a usable schedule.
  *
- * A half-written or hand-edited record must not leave the alarm registered
- * with a nonsense period: an unrecognised interval or target falls back to the
- * default rather than disabling the schedule silently, because a user who
- * asked for automatic backups should not discover months later that none ran.
+ * An unrecognised interval is safe to default: the user asked for automatic
+ * backups and should not discover months later that none ran. An unrecognised
+ * target is not safe to default — writing the bookmark tree to a backend the
+ * user never chose is a disclosure, not an inconvenience — so a corrupt or
+ * hand-edited target switches the schedule off instead of retargeting it.
  */
 export function normalizeBackupSchedule(value: unknown): StoredBackupSchedule {
   if (!value || typeof value !== 'object') return DEFAULT_BACKUP_SCHEDULE;
   const record = value as Partial<StoredBackupSchedule>;
   const known = BACKUP_INTERVALS.some((interval) => interval.minutes === record.everyMinutes);
+  const target =
+    typeof record.target === 'string' && Object.hasOwn(TARGETS, record.target)
+      ? (record.target as BackupTarget)
+      : null;
   return {
-    enabled: record.enabled === true,
+    enabled: record.enabled === true && target !== null,
     everyMinutes: known
       ? (record.everyMinutes as number)
       : DEFAULT_BACKUP_INTERVAL_MINUTES,
-    target:
-      typeof record.target === 'string' && TARGETS[record.target]
-        ? (record.target as BackupTarget)
-        : DEFAULT_BACKUP_SCHEDULE.target,
+    target: target ?? DEFAULT_BACKUP_SCHEDULE.target,
   };
 }
 
@@ -94,9 +98,22 @@ export async function saveIncludedRootIds(ids: readonly string[]): Promise<void>
   await browser.storage.local.set({ [INCLUDED_ROOTS_KEY]: [...new Set(ids)] });
 }
 
+/**
+ * Refuses to guess when the stored selection is unreadable.
+ *
+ * "Empty means every root" is only correct when the user never set a filter.
+ * Quietly dropping malformed entries would turn a corrupted selection into an
+ * unfiltered backup, which uploads exactly the folders the filter existed to
+ * withhold. Failing here surfaces as a visible backup error instead.
+ */
 export async function loadIncludedRootIds(): Promise<string[]> {
   const stored = await browser.storage.local.get(INCLUDED_ROOTS_KEY);
   const ids = stored[INCLUDED_ROOTS_KEY];
-  if (!Array.isArray(ids)) return [];
-  return ids.filter((id): id is string => typeof id === 'string');
+  if (ids === undefined) return [];
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
+    throw new Error(
+      'The bookmark folder selection is unreadable, so Cairn will not guess what to back up. Re-pick the folders in the control center.',
+    );
+  }
+  return ids as string[];
 }

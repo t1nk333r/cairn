@@ -24,16 +24,17 @@ export interface AlarmsApi {
     name: string | undefined,
     info: { delayInMinutes: number; periodInMinutes: number },
   ): unknown;
+  get(name?: string): Promise<{ periodInMinutes?: number | undefined } | undefined>;
   clear(name?: string): unknown;
 }
 
 /**
  * Registers or removes the recurring alarm to match the stored schedule.
  *
- * Safe to call repeatedly: creating an alarm with an existing name replaces it.
- * That matters because this runs on install, on browser startup, and on every
- * settings save — an extension update clears alarms, so re-registering on
- * startup is what keeps a schedule alive across upgrades.
+ * Call this when the user changes the schedule. Creating an alarm with an
+ * existing name replaces it, which restarts the countdown — correct for a
+ * deliberate change, wrong for a routine re-register, so use
+ * `ensureBackupSchedule` for those.
  */
 export async function applyBackupSchedule(
   alarms: AlarmsApi,
@@ -50,6 +51,29 @@ export async function applyBackupSchedule(
     periodInMinutes: schedule.everyMinutes,
     delayInMinutes: schedule.everyMinutes,
   });
+}
+
+/**
+ * Registers the alarm only when it is missing or set to the wrong period.
+ *
+ * Alarms survive a browser restart, but an extension update clears them, so
+ * install and startup both have to re-register. Doing that unconditionally
+ * restarts the countdown every time: someone who restarts their browser more
+ * often than their backup interval would never reach a backup at all. Leaving
+ * a correct existing alarm alone is what makes a daily schedule survive daily
+ * restarts.
+ */
+export async function ensureBackupSchedule(
+  alarms: AlarmsApi,
+  schedule: StoredBackupSchedule,
+): Promise<void> {
+  if (!schedule.enabled) {
+    await alarms.clear(BACKUP_ALARM_NAME);
+    return;
+  }
+  const existing = await alarms.get(BACKUP_ALARM_NAME);
+  if (existing && existing.periodInMinutes === schedule.everyMinutes) return;
+  await applyBackupSchedule(alarms, schedule);
 }
 
 export interface ScheduledBackupInput {

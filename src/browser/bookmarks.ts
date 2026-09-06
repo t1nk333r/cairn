@@ -132,6 +132,9 @@ export async function restoreBookmarks(input: {
   const now = input.now ?? (() => new Date());
   // Resolve the selection before creating anything, so a bad path leaves no
   // empty dated folder behind.
+  if (input.select !== undefined && input.select.length === 0) {
+    throw new Error('Select at least one bookmark or folder to restore.');
+  }
   const roots =
     input.select === undefined
       ? input.document.roots

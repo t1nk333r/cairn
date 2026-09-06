@@ -314,4 +314,14 @@ describe('restoreBookmarks with a selection', () => {
     ).rejects.toThrow(InventoryFormatError);
     expect(created).toEqual([]);
   });
+
+  it('refuses an empty selection instead of creating an empty dated folder', async () => {
+    // `select: []` is a selection of nothing, not a request to restore
+    // everything, and it must not leave a stray folder behind.
+    const { api, created } = fakeApi();
+    await expect(
+      restoreBookmarks({ api, document: document(), select: [], now: () => at }),
+    ).rejects.toThrow(/at least one/i);
+    expect(created).toEqual([]);
+  });
 });

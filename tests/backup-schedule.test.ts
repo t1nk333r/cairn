@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyBackupSchedule,
   BACKUP_ALARM_NAME,
+  ensureBackupSchedule,
   runScheduledBackup,
 } from '../src/browser/backup-schedule';
 import {
@@ -40,7 +41,7 @@ interface AlarmCall {
   info: { delayInMinutes: number; periodInMinutes: number };
 }
 
-const recordingAlarms = () => {
+const recordingAlarms = (existing?: { periodInMinutes?: number }) => {
   const created: AlarmCall[] = [];
   const cleared: (string | undefined)[] = [];
   return {
@@ -49,6 +50,9 @@ const recordingAlarms = () => {
     api: {
       create(name: string | undefined, info: { delayInMinutes: number; periodInMinutes: number }) {
         created.push({ name, info });
+      },
+      async get() {
+        return existing;
       },
       clear(name?: string) {
         cleared.push(name);
@@ -79,6 +83,39 @@ describe('registering the backup alarm', () => {
   it('clears the alarm when the schedule is switched off', async () => {
     const alarms = recordingAlarms();
     await applyBackupSchedule(alarms.api, schedule({ enabled: false }));
+    expect(alarms.cleared).toEqual([BACKUP_ALARM_NAME]);
+    expect(alarms.created).toEqual([]);
+  });
+});
+
+describe('re-registering the alarm on install and startup', () => {
+  it('leaves an already-correct alarm alone', async () => {
+    // Alarms survive a browser restart. Re-creating one restarts its
+    // countdown, so a daily schedule on a browser restarted every few hours
+    // would never actually reach a backup.
+    const alarms = recordingAlarms({ periodInMinutes: 1440 });
+    await ensureBackupSchedule(alarms.api, schedule({ everyMinutes: 1440 }));
+    expect(alarms.created).toEqual([]);
+    expect(alarms.cleared).toEqual([]);
+  });
+
+  it('registers one when the browser has none', async () => {
+    // An extension update clears alarms, so install and startup still have to
+    // put the schedule back.
+    const alarms = recordingAlarms(undefined);
+    await ensureBackupSchedule(alarms.api, schedule({ everyMinutes: 1440 }));
+    expect(alarms.created.at(0)?.info.periodInMinutes).toBe(1440);
+  });
+
+  it('replaces one left on the wrong interval', async () => {
+    const alarms = recordingAlarms({ periodInMinutes: 60 });
+    await ensureBackupSchedule(alarms.api, schedule({ everyMinutes: 10080 }));
+    expect(alarms.created.at(0)?.info.periodInMinutes).toBe(10080);
+  });
+
+  it('clears a leftover alarm when the schedule is off', async () => {
+    const alarms = recordingAlarms({ periodInMinutes: 60 });
+    await ensureBackupSchedule(alarms.api, schedule({ enabled: false }));
     expect(alarms.cleared).toEqual([BACKUP_ALARM_NAME]);
     expect(alarms.created).toEqual([]);
   });
@@ -141,9 +178,21 @@ describe('normalizing a stored schedule', () => {
     });
   });
 
-  it('falls back to a known backend for an unknown target', () => {
-    expect(normalizeBackupSchedule({ enabled: true, everyMinutes: 60, target: 'dropbox' }).target)
-      .toBe('webdav');
+  it('switches the schedule off rather than retargeting an unknown backend', () => {
+    // Defaulting the target would upload the bookmark tree to a backend the
+    // user never chose. Not running is the safe failure.
+    const normalized = normalizeBackupSchedule({
+      enabled: true,
+      everyMinutes: 60,
+      target: 'dropbox',
+    });
+    expect(normalized.enabled).toBe(false);
+  });
+
+  it('does not treat an inherited property as a known backend', () => {
+    expect(
+      normalizeBackupSchedule({ enabled: true, everyMinutes: 60, target: 'constructor' }).enabled,
+    ).toBe(false);
   });
 
   it('treats anything that is not true as off', () => {
