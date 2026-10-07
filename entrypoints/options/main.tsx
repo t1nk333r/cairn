@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { HsyncRequest, HsyncResponse } from '../../src/browser/messages';
+import { RestoreSectionPrototype } from './restore-section.prototype';
 import { diffInventories } from '../../src/core/diff';
 import {
   countBookmarks,
@@ -78,6 +79,7 @@ const NAV_SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'extensions', label: 'Extensions' },
   { id: 'compare', label: 'Compare' },
+  { id: 'restore', label: 'Restore (prototype)' },
   { id: 'bookmarks', label: 'Bookmarks' },
   { id: 'automation', label: 'Automation' },
   { id: 'connections', label: 'Connections' },
@@ -728,6 +730,8 @@ export function App() {
             <div className="empty-state compact"><strong>No comparison inventory</strong><p>Pull from a connected remote below, or import a JSON inventory exported from another device.</p></div>
           )}
         </section>
+
+        <RestoreSectionPrototype />
 
         <section className="compare-card" id="bookmarks">
           <div className="section-heading">
