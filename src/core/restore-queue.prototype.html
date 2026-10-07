@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE · Cairn guided-restore queue</title>
+<style>
+  :root { --fg:#1d232b; --muted:#66707c; --line:#dde2e8; --bg:#f7f8fa; --card:#fff; --accent:#2f6f5e; --warn:#a15c00; --bad:#a32727; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  header { padding:20px 28px 12px; border-bottom:1px solid var(--line); background:var(--card); }
+  header h1 { margin:0 0 4px; font-size:20px; }
+  header .tag { display:inline-block; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#fff; background:var(--bad); padding:1px 6px; border-radius:3px; margin-right:6px; vertical-align:middle; }
+  header p { margin:6px 0; max-width:1100px; color:var(--muted); }
+  main { display:grid; grid-template-columns: 380px 1fr; gap:18px; padding:18px 28px 40px; }
+  section.card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 10px; }
+  h3 { font-size:14px; margin:14px 0 6px; }
+  button { font:inherit; font-size:13px; border:1px solid var(--line); background:#fff; border-radius:5px; padding:3px 9px; cursor:pointer; margin:2px 4px 2px 0; }
+  button:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  select { font:inherit; font-size:13px; padding:2px 4px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }
+  .tabs button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .scenario p { margin:4px 0 10px; color:var(--muted); }
+  .steps button { display:block; width:100%; text-align:left; margin:4px 0; }
+  .steps button.next { border-color:var(--accent); box-shadow:0 0 0 2px #2f6f5e33; }
+  .steps button.done { color:var(--muted); text-decoration:line-through; }
+  table { width:100%; border-collapse:collapse; }
+  td, th { text-align:left; padding:6px 6px; border-top:1px solid var(--line); vertical-align:top; }
+  th { font-size:12px; color:var(--muted); font-weight:600; border-top:none; }
+  .badge { display:inline-block; font-size:11px; padding:0 6px; border-radius:9px; border:1px solid var(--line); color:var(--muted); margin-right:4px; white-space:nowrap; }
+  .st-done { color:var(--accent); font-weight:600; }
+  .st-attn { color:var(--warn); font-weight:600; }
+  .st-quiet { color:var(--muted); }
+  .changed { background:#fff6d6; }
+  .summary { display:flex; flex-wrap:wrap; gap:18px; }
+  .summary div { min-width:120px; }
+  .summary strong { display:block; font-size:18px; }
+  .summary span { color:var(--muted); font-size:12px; }
+  .log { max-height:260px; overflow:auto; font-size:13px; }
+  .log div { padding:2px 0; border-top:1px dashed var(--line); }
+  .log div:first-child { font-weight:600; }
+  .dialog { border:2px solid var(--warn); background:#fffaf0; padding:10px 12px; border-radius:8px; margin-bottom:10px; }
+  .muted { color:var(--muted); }
+  .note { font-size:12px; color:var(--muted); }
+  .complete { color:#fff; background:var(--accent); padding:2px 8px; border-radius:4px; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="tag">Prototype</span>Cairn · guided-restore queue</h1>
+  <p><strong>Question:</strong> does this model of the restore queue behave right? It covers each item's states, how installs Cairn sees in the browser are matched to items (including matches across Firefox/Chromium and within one family), updates and Chrome Sync installs, Cairn's background worker being stopped and restarted, the restore source changing on a new Pull, and the enabled-state step afterwards.</p>
+  <p><strong>The bet:</strong> the queue never trusts individual browser events. Any event, or a wake-up after the worker was stopped, makes Cairn re-read the browser's full extension list and <em>reconcile</em> against it. So an update can't be mistaken for an install, a Chrome Sync install is just another observed install, and nothing is lost while the worker sleeps. The whole queue is plain data that is saved after every change.</p>
+  <p class="muted">Throwaway. Nothing here touches a real browser. The left column drives walkthroughs and free play; the right column shows the full state after every click (yellow = just changed).</p>
+</header>
+<main>
+  <div>
+    <section class="card">
+      <h2>Guided walkthroughs</h2>
+      <div class="tabs" id="tabs"></div>
+      <div class="scenario" id="scenario"></div>
+    </section>
+    <section class="card">
+      <h2>Free play: browser (this profile)</h2>
+      <div id="browser"></div>
+    </section>
+    <section class="card">
+      <h2>Free play: restore</h2>
+      <div id="freeplay"></div>
+    </section>
+  </div>
+  <div id="state"></div>
+</main>
+
+<!-- ===================== PURE MODULE: liftable into src/core ===================== -->
+<script id="restore-queue-module">
+const RestoreQueue = (() => {
+  const STORE_HOSTS = ['chromewebstore.google.com', 'addons.mozilla.org'];
+  const SIGNAL_RANK = { 'AMO browser mapping': 3, 'same developer site': 2, 'same name': 1, 'installed right after you opened its page': 0 };
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const host = (u) => { try { return new URL(u).host; } catch { return null; } };
+  const allowlisted = (u) => !!u && STORE_HOSTS.includes(host(u));
+
+  function log(s, text) { s.log.unshift(text); }
+
+  function addRecord(s, rec, snapshot, origin) {
+    const pf = s.profileFamily;
+    const ids = rec.aliases[pf] || [];
+    const present = snapshot.find((e) => ids.includes(e.id));
+    if (present && origin === 'start') {
+      if (present.enabled !== rec.enabled) s.alreadyHad.push({ key: 'had:' + rec.key, recKey: rec.key, name: rec.name, id: present.id, target: rec.enabled, optedIn: false, step: null });
+      return; // already here: not in the restore set
+    }
+    const storePage = allowlisted(rec.storePage && rec.storePage[pf]) ? rec.storePage[pf] : null;
+    const kind = ids.length === 0 ? 'needs-match' : storePage ? 'store' : 'storeless';
+    s.items.push({
+      key: rec.key, name: rec.name, aliases: clone(rec.aliases), target: rec.enabled,
+      kind, reason: kind === 'storeless' ? ((rec.storeless && rec.storeless[pf]) || 'not-listed') : null,
+      storePage, mappedPage: (rec.mappedPage && rec.mappedPage[pf]) || null, mapping: (rec.mapping && rec.mapping[pf]) || null,
+      developerSite: rec.developerSite || null, sourceDevice: s.source.label,
+      openedAt: null, installedId: null, step: null, skipped: false, gone: false, origin,
+    });
+  }
+
+  function start({ source, profileFamily, snapshot, backend }) {
+    const s = {
+      profileFamily, backend,
+      source: { label: source.label, kind: source.kind, family: source.family, lastSeen: source.lastSeen },
+      pulledAt: source.pulledAt, clock: 0, finished: false,
+      knownAtStart: snapshot.map((e) => e.id), handled: [], dismissed: [], proposals: [],
+      writes: [], log: [], items: [], alreadyHad: [], lastSnapshot: clone(snapshot),
+    };
+    for (const rec of source.records) addRecord(s, rec, snapshot, 'start');
+    log(s, `Restore started from "${source.label}": ${s.items.length} to restore, ${s.alreadyHad.length} already here but on/off differs.`);
+    return reconcileInto(s, snapshot);
+  }
+
+  function stepFor(ext, target, pf, prev) {
+    if (ext.enabled === target) return 'done';
+    if (!ext.mayChange) return 'wont-allow';
+    if (prev === 'declined' && ext.disabledReason === 'permissions_increase') return 'declined';
+    return 'differs';
+  }
+
+  function signal(item, ext) {
+    const pf = ext.family;
+    if (item.mapping && item.mapping === ext.id) return 'AMO browser mapping';
+    if (item.developerSite && ext.homepage && !STORE_HOSTS.includes(host(ext.homepage)) && host(item.developerSite) === host(ext.homepage)) return 'same developer site';
+    if (norm(item.name) === norm(ext.name)) return 'same name';
+    return null;
+  }
+
+  const placed = (s) => {
+    const pf = s.profileFamily, ids = new Set();
+    for (const i of s.items) for (const id of i.aliases[pf] || []) ids.add(id);
+    for (const h of s.alreadyHad) ids.add(h.id);
+    return ids;
+  };
+
+  function reconcileInto(s, snapshot) {
+    s.lastSnapshot = clone(snapshot);
+    if (s.finished) return s;
+    const pf = s.profileFamily;
+    for (const item of s.items) {
+      const ids = item.aliases[pf] || [];
+      const m = snapshot.find((e) => ids.includes(e.id));
+      if (m) {
+        if (!item.installedId) log(s, `${item.name}: install observed (${m.id}).`);
+        const before = item.step;
+        item.installedId = m.id;
+        item.step = stepFor(m, item.target, pf, item.step);
+        if (before === 'done' && item.step !== 'done') log(s, `${item.name}: on/off no longer matches the restore source.`);
+      } else if (item.installedId) {
+        log(s, `${item.name}: no longer installed here, back to "To do".`);
+        item.installedId = null; item.step = null;
+      }
+    }
+    for (const h of s.alreadyHad) {
+      const m = snapshot.find((e) => e.id === h.id);
+      h.step = !m ? 'removed' : !h.optedIn ? (m.enabled === h.target ? 'done' : 'not-included') : stepFor(m, h.target, pf, h.step);
+    }
+    // Drop proposals that no longer make sense.
+    const byKey = Object.fromEntries(s.items.map((i) => [i.key, i]));
+    s.proposals = s.proposals.filter((p) => snapshot.some((e) => e.id === p.extId) && !byKey[p.itemKey].installedId && !byKey[p.itemKey].skipped && !byKey[p.itemKey].gone);
+    // Propose matches for extensions the restore can't place yet.
+    const taken = placed(s);
+    for (const ext of snapshot) {
+      if (taken.has(ext.id) || s.handled.includes(ext.id) || s.proposals.some((p) => p.extId === ext.id)) continue;
+      const isNew = !s.knownAtStart.includes(ext.id);
+      const targets = s.items.filter((i) => !i.installedId && !i.skipped && !i.gone && i.reason !== 'policy'
+        && (i.kind === 'needs-match' || i.kind === 'storeless')
+        && !s.dismissed.some(([k, id]) => k === i.key && id === ext.id)
+        && !s.proposals.some((p) => p.itemKey === i.key));
+      const scored = targets.map((i) => ({ i, sig: signal(i, { ...ext, family: pf }) }));
+      let best = scored.filter((x) => x.sig).sort((a, b) => SIGNAL_RANK[b.sig] - SIGNAL_RANK[a.sig])[0];
+      if (!best && isNew) {
+        best = scored.filter((x) => x.i.openedAt !== null).sort((a, b) => b.i.openedAt - a.i.openedAt)[0];
+        if (best) best.sig = 'installed right after you opened its page';
+      }
+      if (best) {
+        s.proposals.push({ extId: ext.id, extName: ext.name, itemKey: best.i.key, signal: best.sig });
+        log(s, `Possible match: is "${ext.name}" the same as "${best.i.name}"? (${best.sig})`);
+      }
+    }
+    return s;
+  }
+
+  const reconcile = (session, snapshot) => reconcileInto(clone(session), snapshot);
+
+  function statusOf(s, item) {
+    if (item.gone && !item.installedId) return 'gone';
+    if (item.reason === 'policy' && !item.installedId) return 'info';
+    if (item.skipped) return 'skipped';
+    if (item.installedId) return item.step;
+    if (s.proposals.some((p) => p.itemKey === item.key)) return 'proposal';
+    return item.openedAt !== null ? 'opened' : 'waiting';
+  }
+  const OUTSTANDING = new Set(['waiting', 'opened', 'proposal', 'differs', 'declined']);
+
+  function summary(s) {
+    const st = s.items.map((i) => statusOf(s, i));
+    const had = s.alreadyHad.filter((h) => h.optedIn && (h.step === 'differs' || h.step === 'declined')).length;
+    const outstanding = st.filter((x) => OUTSTANDING.has(x)).length + had;
+    return { total: s.items.length, outstanding, done: st.filter((x) => x === 'done').length, complete: outstanding === 0 };
+  }
+
+  function unplaced(s) {
+    const taken = placed(s);
+    return s.lastSnapshot.filter((e) => !s.knownAtStart.includes(e.id) && !taken.has(e.id) && !s.handled.includes(e.id) && !s.proposals.some((p) => p.extId === e.id));
+  }
+
+  function withItem(session, key, fn) {
+    const s = clone(session);
+    const item = s.items.find((i) => i.key === key) || s.alreadyHad.find((h) => h.key === key);
+    fn(s, item);
+    return reconcileInto(s, s.lastSnapshot);
+  }
+
+  const open = (session, key, what) => withItem(session, key, (s, i) => { i.openedAt = ++s.clock; log(s, `${i.name}: you opened ${(what || actionLabel(s, i) || 'its page').toLowerCase()}.`); });
+  const skip = (session, key) => withItem(session, key, (s, i) => { i.skipped = true; log(s, `${i.name}: skipped.`); });
+  const unskip = (session, key) => withItem(session, key, (s, i) => { i.skipped = false; log(s, `${i.name}: back in the queue.`); });
+
+  function link(session, key, extId, how) {
+    return withItem(session, key, (s, i) => {
+      const pf = s.profileFamily;
+      const ext = s.lastSnapshot.find((e) => e.id === extId);
+      const sameFamily = (i.aliases[pf] || []).length > 0;
+      i.aliases[pf] = [...(i.aliases[pf] || []), extId];
+      s.handled.push(extId);
+      s.proposals = s.proposals.filter((p) => p.extId !== extId && p.itemKey !== key);
+      s.writes.unshift(`${sameFamily ? 'Same-family' : 'Cross-family'} link: "${i.name}" + "${ext ? ext.name : extId}" (${extId}): ${s.backend ? 'written to the remote inventory now' : 'held on this device until the next Upload'}`);
+      log(s, `${i.name}: linked to "${ext ? ext.name : extId}" (${how}).`);
+    });
+  }
+  const notSame = (session, key, extId) => withItem(session, key, (s, i) => {
+    s.dismissed.push([key, extId]);
+    s.proposals = s.proposals.filter((p) => !(p.itemKey === key && p.extId === extId));
+    log(s, `${i.name}: you said it is not the same. Cairn will look for another place for it.`);
+  });
+
+  // Returns the browser calls Cairn wants to make; the caller performs them and feeds the new list back via reconcile.
+  function apply(session, key) {
+    const s = clone(session);
+    const i = s.items.find((x) => x.key === key) || s.alreadyHad.find((h) => h.key === key);
+    const ext = s.lastSnapshot.find((e) => e.id === (i.installedId || i.id));
+    if (s.profileFamily !== 'chromium' || !ext) return { session: s, calls: [] };
+    log(s, `${i.name}: you clicked "Turn ${i.target ? 'on' : 'off'}".`);
+    return { session: s, calls: [{ key, id: ext.id, enabled: i.target, needsOwnClick: ext.disabledReason === 'permissions_increase' }] };
+  }
+  function applyAll(session) {
+    const s = clone(session);
+    const calls = [], skipped = [];
+    const rows = [...s.items.filter((i) => i.installedId && i.step === 'differs' && !i.skipped), ...s.alreadyHad.filter((h) => h.optedIn && h.step === 'differs')];
+    for (const i of rows) {
+      const ext = s.lastSnapshot.find((e) => e.id === (i.installedId || i.id));
+      if (ext.disabledReason === 'permissions_increase') { skipped.push(i.name); continue; }
+      calls.push({ key: i.key, id: ext.id, enabled: i.target, needsOwnClick: false });
+    }
+    log(s, `Apply all: ${calls.length} change(s) requested${skipped.length ? `; skipped ${skipped.join(', ')} (needs its own click for Chrome's permission prompt)` : ''}.`);
+    return { session: s, calls };
+  }
+  const declined = (session, key) => withItem(session, key, (s, i) => { i.step = 'declined'; log(s, `${i.name}: you declined Chrome's re-enable prompt.`); });
+  const optIn = (session, key, on) => withItem(session, key, (s, h) => { h.optedIn = on; log(s, `${h.name}: ${on ? 'included in' : 'left out of'} this restore.`); });
+
+  function refreshPull(session, source) {
+    const s = clone(session);
+    const pf = s.profileFamily;
+    for (const i of s.items) {
+      const rec = source.records.find((r) => r.key === i.key);
+      if (!rec) { if (!i.gone) log(s, `${i.name}: no longer on the restore source${i.installedId ? ' (already installed here, left as is)' : ''}.`); i.gone = true; continue; }
+      if (rec.enabled !== i.target) log(s, `${i.name}: restore source now has it ${rec.enabled ? 'on' : 'off'}.`);
+      i.target = rec.enabled; i.gone = false;
+    }
+    for (const rec of source.records) {
+      if (s.items.some((i) => i.key === rec.key) || s.alreadyHad.some((h) => h.recKey === rec.key)) continue;
+      if ((rec.aliases[pf] || []).some((id) => s.lastSnapshot.some((e) => e.id === id))) continue;
+      addRecord(s, rec, s.lastSnapshot, 'added on Pull');
+      log(s, `${rec.name}: new on the restore source, added to the queue.`);
+    }
+    s.pulledAt = source.pulledAt;
+    log(s, `Pulled again (${source.pulledAt}).`);
+    return reconcileInto(s, s.lastSnapshot);
+  }
+  const finish = (session) => { const s = clone(session); s.finished = true; log(s, 'Restore finished. Cairn stops reconciling; later changes are only shown in Compare.'); return s; };
+
+  function actionLabel(s, i) {
+    const pf = s.profileFamily;
+    const store = pf === 'firefox' ? 'addons.mozilla.org' : 'Chrome Web Store';
+    if (i.kind === 'store') return 'Store page';
+    if (i.kind === 'needs-match') return i.mappedPage ? 'Mapped store page' : `Search ${store} for "${i.name}"`;
+    if (i.reason === 'self-hosted') return 'Developer site';
+    if (i.reason === 'unpacked') return null;
+    if (i.reason === 'policy') return null;
+    return `Search ${store} for "${i.name}"`;
+  }
+
+  return { start, reconcile, statusOf, summary, unplaced, open, skip, unskip, link, notSame, apply, applyAll, declined, optIn, refreshPull, finish, actionLabel };
+})();
+</script>
+
+<!-- ===================== THROWAWAY PAGE SHELL ===================== -->
+<script>
+const clone = (x) => JSON.parse(JSON.stringify(x));
+
+// ---------- worlds: restore source + this profile's starting extensions + what the user can install ----------
+const CWS = (id) => `https://chromewebstore.google.com/detail/${id}`;
+const AMO = (slug) => `https://addons.mozilla.org/firefox/addon/${slug}/`;
+const WORLDS = {
+  A: {
+    title: 'Helium laptop → clean Chrome profile', profileFamily: 'chromium', backend: true,
+    source: { label: 'Laptop (Helium)', kind: 'device', family: 'chromium', lastSeen: '2 days ago', pulledAt: 'today 09:00', records: [
+      { key: 'bitwarden', name: 'Bitwarden', aliases: { chromium: ['nngceckbap'] }, storePage: { chromium: CWS('nngceckbap') }, developerSite: 'https://bitwarden.com', enabled: true },
+      { key: 'jsonviewer', name: 'JSON Viewer', aliases: { chromium: ['gbmdgpbipf'] }, storePage: { chromium: CWS('gbmdgpbipf') }, enabled: false },
+      { key: 'darkreader', name: 'Dark Reader', aliases: { chromium: ['eimadpbcbf'] }, storePage: { chromium: CWS('eimadpbcbf') }, enabled: true },
+      { key: 'ubo', name: 'uBlock Origin', aliases: { chromium: ['blockjmkba'] }, storeless: { chromium: 'bundled' }, developerSite: 'https://github.com/gorhill/uBlock', enabled: true },
+      { key: 'devtool', name: 'My Dev Tool', aliases: { chromium: ['hhamaicalc'] }, storeless: { chromium: 'unpacked' }, enabled: true },
+      { key: 'corpsso', name: 'Corp SSO', aliases: { chromium: ['corpssoabc'] }, storeless: { chromium: 'policy' }, enabled: true },
+      { key: 'proxy', name: 'Proxy Helper', aliases: { chromium: ['prxyhelper'] }, storeless: { chromium: 'self-hosted' }, developerSite: 'https://proxyhelper.example', enabled: true },
+    ] },
+    refreshed: { pulledAt: 'today 11:30', changes: 'Proxy Helper removed, Refined GitHub added, JSON Viewer now on' },
+    start: [
+      { id: 'eimadpbcbf', name: 'Dark Reader', enabled: false, mayChange: true },
+      { id: 'kbfnbcaeplb', name: 'Grammarly', enabled: true, mayChange: true },
+    ],
+    catalog: [
+      { id: 'nngceckbap', name: 'Bitwarden', homepage: 'https://bitwarden.com' },
+      { id: 'gbmdgpbipf', name: 'JSON Viewer' },
+      { id: 'cjpalhdlnb', name: 'uBlock Origin', homepage: CWS('cjpalhdlnb') },
+      { id: 'hlepfoohegk', name: 'Refined GitHub' },
+      { id: 'kkdevreload', name: 'My Dev Tool', note: 'unpacked again, new ID' },
+      { id: 'prxyhelper', name: 'Proxy Helper', homepage: 'https://proxyhelper.example', note: 'from developer site' },
+      { id: 'corpssoabc', name: 'Corp SSO', note: 'by policy, off, locked', locked: true, startsOff: true },
+      { id: 'iaiomicjab', name: 'Tab Session Manager' },
+    ],
+  },
+  B: {
+    title: 'Chrome desktop → clean Firefox profile', profileFamily: 'firefox', backend: true,
+    source: { label: 'Desktop (Chrome)', kind: 'device', family: 'chromium', lastSeen: 'today', pulledAt: 'today 09:00', records: [
+      { key: 'ubo', name: 'uBlock Origin', aliases: { chromium: ['cjpalhdlnb'] }, mapping: { firefox: 'uBlock0@raymondhill.net' }, mappedPage: { firefox: AMO('ublock-origin') }, developerSite: 'https://github.com/gorhill/uBlock', enabled: true },
+      { key: 'bitwarden', name: 'Bitwarden', aliases: { chromium: ['nngceckbap'] }, developerSite: 'https://bitwarden.com', enabled: true },
+      { key: 'jsonviewer', name: 'JSON Viewer', aliases: { chromium: ['gbmdgpbipf'] }, enabled: true },
+      { key: 'sessionbuddy', name: 'Session Buddy', aliases: { chromium: ['edacconmaa'] }, enabled: true },
+      { key: 'grammarly', name: 'Grammarly', aliases: { chromium: ['kbfnbcaeplb'] }, enabled: false },
+    ] },
+    start: [{ id: '{446900e4-71c2}', name: 'Bitwarden Password Manager', enabled: true, mayChange: true, homepage: 'https://bitwarden.com' }],
+    catalog: [
+      { id: 'uBlock0@raymondhill.net', name: 'uBlock Origin', homepage: 'https://github.com/gorhill/uBlock' },
+      { id: 'jsonview@brh.numbera.com', name: 'JSONView' },
+      { id: '87677a2c@jetpack', name: 'Grammarly' },
+      { id: 'tab-session@sienori', name: 'Tab Session Manager' },
+    ],
+  },
+};
+WORLDS.C = { ...clone(WORLDS.B), title: 'Imported file → clean Firefox profile (no backend)', backend: false };
+WORLDS.C.source.label = 'From file: Old desktop';
+WORLDS.C.source.kind = 'file';
+function refreshedSourceA() {
+  const src = clone(WORLDS.A.source);
+  src.pulledAt = WORLDS.A.refreshed.pulledAt;
+  src.records = src.records.filter((r) => r.key !== 'proxy');
+  src.records.find((r) => r.key === 'jsonviewer').enabled = true;
+  src.records.push({ key: 'refinedgh', name: 'Refined GitHub', aliases: { chromium: ['hlepfoohegk'] }, storePage: { chromium: CWS('hlepfoohegk') }, enabled: true });
+  return src;
+}
+
+// ---------- simulated browser ----------
+let world, worldKey, browserExts, workerAwake, session, prevSession, dialog, missed;
+function snapshot() { return clone(browserExts); }
+function deliver(eventName) {
+  if (!workerAwake) { missed.push(eventName); prevSession = session; render(); return; }
+  prevSession = session;
+  session = RestoreQueue.reconcile(session, snapshot());
+  session.log.unshift(`Browser: ${eventName}. Cairn re-read the extension list.`);
+  render();
+}
+function reset(key) {
+  worldKey = key; world = WORLDS[key];
+  browserExts = world.start.map((e) => ({ version: '1.0', disabledReason: null, ...e }));
+  workerAwake = true; dialog = null; missed = [];
+  session = RestoreQueue.start({ source: world.source, profileFamily: world.profileFamily, snapshot: snapshot(), backend: world.backend });
+  prevSession = session;
+  render();
+}
+const B = {
+  install(id, how = 'store') {
+    const c = world.catalog.find((x) => x.id === id);
+    if (browserExts.some((e) => e.id === id)) return;
+    const viaSync = how === 'sync';
+    browserExts.push({ id, name: c.name, homepage: c.homepage, version: '1.0', enabled: !(viaSync || c.startsOff), mayChange: !c.locked, disabledReason: null });
+    deliver(viaSync ? `Chrome Sync installed "${c.name}" (arrived off)` : `you installed "${c.name}"${c.note ? ` (${c.note})` : ''}${world.profileFamily === 'chromium' ? ' (onEnabled, onInstalled)' : ' (onInstalled)'}`);
+  },
+  update(id, newPerms) {
+    const e = browserExts.find((x) => x.id === id);
+    e.version = (parseFloat(e.version) + 0.1).toFixed(1);
+    if (newPerms && world.profileFamily === 'chromium') { e.enabled = false; e.disabledReason = 'permissions_increase'; }
+    deliver(`"${e.name}" updated to ${e.version}${newPerms ? ' and asked for new permissions (Chrome turned it off)' : ''} (onInstalled)`);
+  },
+  toggle(id) { const e = browserExts.find((x) => x.id === id); e.enabled = !e.enabled; if (e.enabled) e.disabledReason = null; deliver(`you turned "${e.name}" ${e.enabled ? 'on' : 'off'} by hand`); },
+  uninstall(id) { const e = browserExts.find((x) => x.id === id); browserExts = browserExts.filter((x) => x.id !== id); deliver(`you uninstalled "${e.name}"`); },
+  perform(calls) {
+    for (const c of calls) {
+      const e = browserExts.find((x) => x.id === c.id);
+      if (!e.mayChange) { session.log.unshift(`Browser refused: "${e.name}" cannot be modified.`); continue; }
+      if (c.enabled && c.needsOwnClick) { dialog = { key: c.key, id: c.id, name: e.name }; continue; }
+      e.enabled = c.enabled;
+      deliver(`Cairn turned "${e.name}" ${c.enabled ? 'on' : 'off'}`);
+    }
+    render();
+  },
+  dialogAnswer(accept) {
+    const d = dialog; dialog = null;
+    if (accept) { const e = browserExts.find((x) => x.id === d.id); e.enabled = true; e.disabledReason = null; deliver(`you accepted Chrome's prompt; "${d.name}" is on`); }
+    else { prevSession = session; session = RestoreQueue.declined(session, d.key); render(); }
+  },
+  sleep() { workerAwake = false; missed = []; session.log.unshift('Cairn\'s background worker was stopped (idle, or the browser closed). The queue is already saved.'); render(); },
+  wake() {
+    const stored = JSON.stringify(session); // what storage.local holds
+    workerAwake = true; prevSession = session;
+    session = RestoreQueue.reconcile(JSON.parse(stored), snapshot());
+    session.log.unshift(`Cairn woke up, loaded the saved queue, and re-read the extension list. Events it never saw: ${missed.length ? missed.join('; ') : 'none'}.`);
+    missed = []; render();
+  },
+};
+const Q = {
+  open(k, what) { prevSession = session; session = RestoreQueue.open(session, k, what); render(); },
+  skip(k) { prevSession = session; session = RestoreQueue.skip(session, k); render(); },
+  unskip(k) { prevSession = session; session = RestoreQueue.unskip(session, k); render(); },
+  link(k, id, how = 'you confirmed') { prevSession = session; session = RestoreQueue.link(session, k, id, how); render(); },
+  notSame(k, id) { prevSession = session; session = RestoreQueue.notSame(session, k, id); render(); },
+  apply(k) { prevSession = session; const r = RestoreQueue.apply(session, k); session = r.session; B.perform(r.calls); },
+  applyAll() { prevSession = session; const r = RestoreQueue.applyAll(session); session = r.session; B.perform(r.calls); },
+  optIn(k, on) { prevSession = session; session = RestoreQueue.optIn(session, k, on); render(); },
+  pull() { prevSession = session; session = RestoreQueue.refreshPull(session, refreshedSourceA()); render(); },
+  finish() { prevSession = session; session = RestoreQueue.finish(session); render(); },
+};
+
+// ---------- walkthroughs ----------
+const SCENARIOS = [
+  { name: 'Happy path', world: 'A', text: 'Same family. Two store installs; JSON Viewer is off on the restore source, so after its install Cairn offers to turn it off. Watch each row move from "To do" to "Done", and the outstanding count fall.', steps: [
+    ['Open Bitwarden\'s store page', () => Q.open('bitwarden')],
+    ['Browser: install Bitwarden', () => B.install('nngceckbap')],
+    ['Open JSON Viewer\'s store page', () => Q.open('jsonviewer')],
+    ['Browser: install JSON Viewer (arrives on)', () => B.install('gbmdgpbipf')],
+    ['Click "Turn off" on JSON Viewer', () => Q.apply('jsonviewer')],
+    ['Skip My Dev Tool', () => Q.skip('devtool')],
+  ] },
+  { name: 'Updates & Chrome Sync', world: 'A', text: 'An update fires onInstalled too, but changes nothing in the list, so nothing in the queue moves. Chrome Sync installs count as observed installs; they may arrive off.', steps: [
+    ['Browser: Grammarly (not in the restore) updates', () => B.update('kbfnbcaeplb')],
+    ['Browser: Chrome Sync installs JSON Viewer, off', () => B.install('gbmdgpbipf', 'sync')],
+    ['Browser: Chrome Sync installs Bitwarden, off', () => B.install('nngceckbap', 'sync')],
+    ['Click "Apply all"', () => Q.applyAll()],
+  ] },
+  { name: 'Worker stopped', world: 'A', text: 'Cairn\'s worker is stopped while you install things. It misses every event, but on waking it loads the saved queue and re-reads the list, so it ends in the same state as if it had seen everything.', steps: [
+    ['Open Bitwarden\'s store page', () => Q.open('bitwarden')],
+    ['Cairn\'s worker stops', () => B.sleep()],
+    ['Browser: install Bitwarden', () => B.install('nngceckbap')],
+    ['Browser: install JSON Viewer', () => B.install('gbmdgpbipf')],
+    ['Browser: Bitwarden updates', () => B.update('nngceckbap')],
+    ['Cairn\'s worker wakes up', () => B.wake()],
+  ] },
+  { name: 'Bundled uBO', world: 'A', text: 'Helium\'s bundled uBlock Origin has an ID Chrome can\'t install. Cairn offers a store search; when the CWS copy is installed, "same name" proposes it as the match. Link adds the CWS ID as a second Chromium alias.', steps: [
+    ['Open "Search Chrome Web Store" on uBlock Origin', () => Q.open('ubo')],
+    ['Browser: install uBlock Origin from CWS', () => B.install('cjpalhdlnb')],
+    ['Click Link on the proposal', () => Q.link('ubo', 'cjpalhdlnb')],
+  ] },
+  { name: 'Cross-family', world: 'B', text: 'Chrome source, Firefox profile: no item has a Firefox ID. Bitwarden is already here, and "same developer site" proposes it immediately. uBO gets the mapped AMO page. Grammarly is off on the source, and Firefox can\'t switch it, so the row tells you to do it in the Add-ons Manager.', steps: [
+    ['Click Link on the Bitwarden proposal', () => Q.link('bitwarden', '{446900e4-71c2}')],
+    ['Open uBlock Origin\'s mapped AMO page', () => Q.open('ubo')],
+    ['Browser: install uBlock Origin', () => B.install('uBlock0@raymondhill.net')],
+    ['Click Link on the uBO proposal', () => Q.link('ubo', 'uBlock0@raymondhill.net')],
+    ['Open the AMO search for Grammarly', () => Q.open('grammarly')],
+    ['Browser: install Grammarly', () => B.install('87677a2c@jetpack')],
+    ['Click Link on the Grammarly proposal', () => Q.link('grammarly', '87677a2c@jetpack')],
+    ['Browser: you turn Grammarly off in Add-ons Manager', () => B.toggle('87677a2c@jetpack')],
+  ] },
+  { name: 'Wrong guess', world: 'B', text: 'Two searches are open. JSONView shares no signal with "JSON Viewer", so Cairn guesses the most recently opened item (Session Buddy): wrong. "Not the same" moves the proposal to the other opened item.', steps: [
+    ['Open the AMO search for JSON Viewer', () => Q.open('jsonviewer')],
+    ['Open the AMO search for Session Buddy', () => Q.open('sessionbuddy')],
+    ['Browser: install JSONView', () => B.install('jsonview@brh.numbera.com')],
+    ['Click "Not the same" (it is not Session Buddy)', () => Q.notSame('sessionbuddy', 'jsonview@brh.numbera.com')],
+    ['Click Link (JSONView is JSON Viewer)', () => Q.link('jsonviewer', 'jsonview@brh.numbera.com')],
+  ] },
+  { name: 'Pull mid-restore', world: 'A', text: 'The restore source uploads while you\'re restoring, and you Pull again. Removed items not yet installed drop out of the count; new ones join, marked; target on/off states follow the source.', steps: [
+    ['Browser: install JSON Viewer (arrives on, source wants off)', () => B.install('gbmdgpbipf')],
+    ['Pull again (Proxy Helper removed, Refined GitHub added, JSON Viewer now on)', () => Q.pull()],
+  ] },
+  { name: 'Permission prompt', world: 'A', text: 'Bitwarden updates asking for more permissions, and Chrome turns it off. Apply all skips it, because re-enabling needs its own click so Chrome can show its prompt. Declining keeps the row outstanding with the reason shown.', steps: [
+    ['Browser: install Bitwarden', () => B.install('nngceckbap')],
+    ['Browser: Bitwarden updates with new permissions', () => B.update('nngceckbap', true)],
+    ['Click "Apply all"', () => Q.applyAll()],
+    ['Click "Turn on" on Bitwarden', () => Q.apply('bitwarden')],
+    ['Chrome\'s prompt: Decline', () => B.dialogAnswer(false)],
+    ['Click "Turn on" on Bitwarden again', () => Q.apply('bitwarden')],
+    ['Chrome\'s prompt: Accept', () => B.dialogAnswer(true)],
+  ] },
+  { name: 'File, no backend', world: 'C', text: 'Restoring from an imported file with no backend configured: links still work for this restore, but they are held on this device until an Upload.', steps: [
+    ['Click Link on the Bitwarden proposal', () => Q.link('bitwarden', '{446900e4-71c2}')],
+    ['Open uBlock Origin\'s mapped AMO page', () => Q.open('ubo')],
+    ['Browser: install uBlock Origin', () => B.install('uBlock0@raymondhill.net')],
+    ['Click Link on the uBO proposal', () => Q.link('ubo', 'uBlock0@raymondhill.net')],
+  ] },
+];
+let activeScenario = 0, stepIndex = 0;
+function startScenario(i) { activeScenario = i; stepIndex = 0; reset(SCENARIOS[i].world); }
+function runStep(i) { if (i !== stepIndex) return; SCENARIOS[activeScenario].steps[i][1](); stepIndex++; render(); }
+
+// ---------- rendering ----------
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const STATUS = {
+  waiting: ['To do', 'st-quiet'], opened: ['Page opened: waiting to see the install', 'st-attn'], proposal: ['Possible match found', 'st-attn'],
+  differs: ['Installed; on/off differs from source', 'st-attn'], declined: ['Installed; you declined Chrome\'s prompt', 'st-attn'],
+  'wont-allow': ['Installed; browser won\'t allow changes', 'st-quiet'], done: ['Done', 'st-done'], skipped: ['Skipped', 'st-quiet'],
+  gone: ['No longer on the restore source', 'st-quiet'], info: ['Info only', 'st-quiet'],
+};
+function itemActions(i, status) {
+  const pf = session.profileFamily, out = [];
+  if (session.finished) return '<span class="muted">Restore finished</span>';
+  if (status === 'waiting' || status === 'opened') {
+    const label = RestoreQueue.actionLabel(session, i);
+    if (label) out.push(`<button onclick="Q.open('${i.key}')">${esc(label)} ↗</button>`);
+    if (i.reason === 'unpacked') out.push(`<span class="note">Unpacked on ${esc(i.sourceDevice)}: load it from its source folder.</span>`);
+    if (i.developerSite && i.reason !== 'self-hosted') out.push(`<button onclick="Q.open('${i.key}', 'Developer site')">Developer site ↗</button>`);
+    if (i.kind !== 'store') {
+      const opts = session.lastSnapshot.filter((e) => !session.handled.includes(e.id)).map((e) => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('');
+      if (opts) out.push(`<select id="pick-${i.key}"><option value="">Pick installed…</option>${opts}</select><button onclick="const v=document.getElementById('pick-${i.key}').value; v && Q.link('${i.key}', v, 'picked by hand')">Link</button>`);
+    }
+    out.push(`<button onclick="Q.skip('${i.key}')">Skip</button>`);
+  }
+  if (status === 'proposal') {
+    const p = session.proposals.find((x) => x.itemKey === i.key);
+    out.push(`Is <strong>${esc(p.extName)}</strong> the same? <span class="badge">${esc(p.signal)}</span><br><button class="primary" onclick="Q.link('${i.key}', '${esc(p.extId)}')">Link</button><button onclick="Q.notSame('${i.key}', '${esc(p.extId)}')">Not the same</button><button onclick="Q.skip('${i.key}')">Skip</button>`);
+  }
+  if (status === 'differs' || status === 'declined') {
+    const ext = session.lastSnapshot.find((e) => e.id === i.installedId);
+    if (pf === 'firefox') out.push(`<span class="note">Open Add-ons Manager (Ctrl+Shift+A) and turn ${i.target ? 'on' : 'off'} "${esc(ext.name)}". Cairn will notice.</span>`);
+    else out.push(`<button class="primary" onclick="Q.apply('${i.key}')">Turn ${i.target ? 'on' : 'off'}</button>${ext.disabledReason === 'permissions_increase' ? '<span class="note">Asked for new permissions; needs its own click</span>' : ''}`);
+    out.push(`<button onclick="Q.skip('${i.key}')">Skip</button>`);
+  }
+  if (status === 'skipped') out.push(`<button onclick="Q.unskip('${i.key}')">Undo skip</button>`);
+  if (status === 'info') out.push(`<span class="note">Installed by policy on ${esc(i.sourceDevice)}</span>`);
+  return out.join(' ');
+}
+function changedItem(key) {
+  const a = prevSession && (prevSession.items.find((i) => i.key === key) || prevSession.alreadyHad.find((h) => h.key === key));
+  const b = session.items.find((i) => i.key === key) || session.alreadyHad.find((h) => h.key === key);
+  if (!a) return true;
+  return JSON.stringify(a) !== JSON.stringify(b) || (prevSession && RestoreQueue.statusOf(prevSession, a) !== RestoreQueue.statusOf(session, b));
+}
+function render() {
+  // tabs
+  document.getElementById('tabs').innerHTML = SCENARIOS.map((s, i) => `<button class="${i === activeScenario ? 'active' : ''}" onclick="startScenario(${i})">${esc(s.name)}</button>`).join('');
+  const sc = SCENARIOS[activeScenario];
+  document.getElementById('scenario').innerHTML = `<p><strong>${esc(WORLDS[sc.world].title)}.</strong> ${esc(sc.text)}</p><div class="steps">${sc.steps.map((st, i) => `<button class="${i < stepIndex ? 'done' : i === stepIndex ? 'next' : ''}" ${i === stepIndex ? '' : 'disabled'} onclick="runStep(${i})">${i + 1}. ${esc(st[0])}</button>`).join('')}</div><button onclick="startScenario(${activeScenario})">Restart this walkthrough</button>`;
+
+  // browser free play
+  const pf = world.profileFamily;
+  document.getElementById('browser').innerHTML = `
+    <div class="note">${pf === 'chromium' ? 'Chromium-family profile' : 'Firefox profile'} · Cairn's worker: <strong>${workerAwake ? 'running' : 'stopped'}</strong></div>
+    <h3>Installed here</h3>
+    ${browserExts.length ? browserExts.map((e) => `<div>${esc(e.name)} <span class="badge">${e.enabled ? 'on' : 'off'}</span>${e.disabledReason ? '<span class="badge">permissions increased</span>' : ''}${e.mayChange ? '' : '<span class="badge">locked</span>'}<br>
+      <button onclick="B.update('${esc(e.id)}')">Update</button>${pf === 'chromium' ? `<button onclick="B.update('${esc(e.id)}', true)">Update + new permissions</button>` : ''}<button onclick="B.toggle('${esc(e.id)}')">Turn ${e.enabled ? 'off' : 'on'} by hand</button><button onclick="B.uninstall('${esc(e.id)}')">Uninstall</button></div>`).join('') : '<div class="muted">nothing</div>'}
+    <h3>Install something</h3>
+    <select id="cat">${world.catalog.filter((c) => !browserExts.some((e) => e.id === c.id)).map((c) => `<option value="${esc(c.id)}">${esc(c.name)}${c.note ? ` (${esc(c.note)})` : ''}</option>`).join('')}</select><br>
+    <button onclick="B.install(document.getElementById('cat').value)">You install it</button>${pf === 'chromium' ? `<button onclick="B.install(document.getElementById('cat').value, 'sync')">Chrome Sync installs it (off)</button>` : ''}
+    <h3>Cairn's worker</h3>
+    <button onclick="B.sleep()" ${workerAwake ? '' : 'disabled'}>Stop worker</button><button onclick="B.wake()" ${workerAwake ? 'disabled' : ''}>Wake worker</button>`;
+
+  document.getElementById('freeplay').innerHTML = `
+    <button onclick="reset('A')">Reset: ${esc(WORLDS.A.title)}</button><br>
+    <button onclick="reset('B')">Reset: ${esc(WORLDS.B.title)}</button><br>
+    <button onclick="reset('C')">Reset: ${esc(WORLDS.C.title)}</button><br>
+    ${pf === 'chromium' ? '<button onclick="Q.applyAll()">Apply all</button>' : ''}
+    ${worldKey === 'A' ? `<button onclick="Q.pull()">Pull again (${esc(WORLDS.A.refreshed.changes)})</button>` : ''}
+    <button onclick="Q.finish()" ${session.finished ? 'disabled' : ''}>Finish restore</button>`;
+
+  // state
+  const sum = RestoreQueue.summary(session);
+  const unplaced = RestoreQueue.unplaced(session);
+  const st = document.getElementById('state');
+  st.innerHTML = `
+    ${dialog ? `<div class="dialog"><strong>Chrome:</strong> "${esc(dialog.name)}" needs new permissions to be turned back on.<br><button class="primary" onclick="B.dialogAnswer(true)">Accept</button><button onclick="B.dialogAnswer(false)">Decline</button></div>` : ''}
+    <section class="card">
+      <h2>Restore</h2>
+      <div class="summary">
+        <div><strong>${esc(session.source.label)}</strong><span>restore source · last seen ${esc(session.source.lastSeen)}</span></div>
+        <div><strong>${esc(session.pulledAt)}</strong><span>pulled</span></div>
+        <div><strong>${sum.outstanding}</strong><span>still to do</span></div>
+        <div><strong>${sum.done} / ${sum.total}</strong><span>done</span></div>
+        <div><strong>${session.backend ? 'yes' : 'no'}</strong><span>backend configured</span></div>
+        <div>${session.finished ? '<span class="complete">Finished</span>' : sum.complete ? '<span class="complete">Complete</span>' : '<span class="muted">In progress</span>'}</div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Restore queue</h2>
+      <table><tr><th>Extension</th><th>Status</th><th>What you can do</th></tr>
+      ${session.items.map((i) => { const s = RestoreQueue.statusOf(session, i); const [label, cls] = STATUS[s]; return `<tr class="${changedItem(i.key) ? 'changed' : ''}">
+        <td><strong>${esc(i.name)}</strong><br>${i.kind === 'store' ? '<span class="badge">store page</span>' : i.kind === 'needs-match' ? '<span class="badge">needs a match from the other family</span>' : `<span class="badge">store-less: ${esc(i.reason)}</span>`}${i.origin !== 'start' ? `<span class="badge">${esc(i.origin)}</span>` : ''}<span class="badge">source: ${i.target ? 'on' : 'off'}</span>
+          <div class="note">IDs here: ${esc((i.aliases[pf] || []).join(', ') || 'none')}${i.installedId ? ` · installed as ${esc(i.installedId)}` : ''}</div></td>
+        <td class="${cls}">${label}</td><td>${itemActions(i, s)}</td></tr>`; }).join('')}
+      </table>
+    </section>
+    <section class="card">
+      <h2>Already here, but on/off differs from the source (opt in)</h2>
+      ${session.alreadyHad.length ? `<table>${session.alreadyHad.map((h) => { const ext = session.lastSnapshot.find((e) => e.id === h.id); return `<tr class="${changedItem(h.key) ? 'changed' : ''}"><td><strong>${esc(h.name)}</strong> <span class="badge">here: ${ext ? (ext.enabled ? 'on' : 'off') : 'removed'}</span><span class="badge">source: ${h.target ? 'on' : 'off'}</span></td>
+        <td>${h.step === 'done' ? '<span class="st-done">Matches</span>' : h.step === 'not-included' ? `<button onclick="Q.optIn('${h.key}', true)">Include</button>` : h.step === 'removed' ? '<span class="muted">Uninstalled</span>' : pf === 'firefox' ? `<span class="note">Open Add-ons Manager and turn it ${h.target ? 'on' : 'off'}.</span> <button onclick="Q.optIn('${h.key}', false)">Leave as is</button>` : h.step === 'wont-allow' ? 'Browser won\'t allow changes' : `<button class="primary" onclick="Q.apply('${h.key}')">Turn ${h.target ? 'on' : 'off'}</button><button onclick="Q.optIn('${h.key}', false)">Leave as is</button>`}</td></tr>`; }).join('')}</table>` : '<div class="muted">none</div>'}
+    </section>
+    <section class="card">
+      <h2>New installs Cairn can't place</h2>
+      ${unplaced.length ? unplaced.map((e) => `<div>${esc(e.name)} <span class="note">(${esc(e.id)}): use "Pick installed…" on a row to link it</span></div>`).join('') : '<div class="muted">none</div>'}
+    </section>
+    <section class="card">
+      <h2>Inventory writes</h2>
+      ${session.writes.length ? session.writes.map((w) => `<div>${esc(w)}</div>`).join('') : '<div class="muted">none</div>'}
+    </section>
+    <section class="card">
+      <h2>What happened (newest first)</h2>
+      <div class="log">${session.log.map((l) => `<div>${esc(l)}</div>`).join('')}</div>
+    </section>`;
+}
+startScenario(0);
+</script>
+</body>
+</html>
